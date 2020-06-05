@@ -4,6 +4,8 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
+mod texture;
+
 struct State {
     surface: wgpu::Surface,
     adapter: wgpu::Adapter,
@@ -17,9 +19,7 @@ struct State {
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
 
-    diffuse_texture: wgpu::Texture,
-    diffuse_texture_view: wgpu::TextureView,
-    diffuse_sampler: wgpu::Sampler,
+    diffuse_texture: texture::Texture,
     diffuse_bind_group: wgpu::BindGroup,
 
     size: winit::dpi::PhysicalSize<u32>,
@@ -57,7 +57,7 @@ unsafe impl bytemuck::Pod for Vertex {}
 unsafe impl bytemuck::Zeroable for Vertex {}
 
 const VERTICIES: &[Vertex] = &[
-    Vertex { position: [0.1, 0.5, 0.0], tex_coords: [1.0, 0.0] },
+    Vertex { position: [0.5, 0.5, 0.0], tex_coords: [1.0, 0.0] },
     Vertex { position: [-0.5, 0.5, 0.0], tex_coords: [0.0, 0.0] },
     Vertex { position: [-0.5, -0.5, 0.0], tex_coords: [0.0, 1.0] },
     Vertex { position: [0.5, -0.5, 0.0], tex_coords: [1.0, 1.0] },
@@ -98,39 +98,9 @@ impl State {
         let swap_chain = device.create_swap_chain(&surface, &sc_desc);
 
         let diffuse_bytes = include_bytes!("test.png");
-        let diffuse_image = image::load_from_memory(diffuse_bytes).unwrap();
-        let diffuse_rgba = diffuse_image.as_rgba8().unwrap();
+        let (diffuse_texture, cmd_buffer) = texture::Texture::from_bytes(&device, diffuse_bytes, "pip").unwrap();
 
-        use image::GenericImageView;
-        let dimensions = diffuse_image.dimensions();
-
-	let size2 = wgpu::Extent3d {
-	    width: dimensions.0,
-	    height: dimensions.1,
-	    depth: 1,
-	};
-
-	let diffuse_texture = device.create_texture(&wgpu::TextureDescriptor {
-	    // All textures are stored as 3d, we represent our 2d texture
-	    // by setting depth to 1.
-	    size: size2,
-	    // You can store multiple textures of the same size in one
-	    // Texture object
-	    array_layer_count: 1,
-	    mip_level_count: 1, // We'll talk about this a little later
-	    sample_count: 1,
-	    dimension: wgpu::TextureDimension::D2,
-	    format: wgpu::TextureFormat::Rgba8UnormSrgb,
-	    // SAMPLED tells wgpu that we want to use this texture in shaders
-	    // COPY_DST means that we want to copy data to this texture
-	    usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
-	    label: Some("diffuse_texture"),
-	});
-
-        let buffer = device.create_buffer_with_data(
-            &diffuse_rgba,
-            wgpu::BufferUsage::COPY_SRC,
-        );
+        queue.submit(&[cmd_buffer]);
 
         let vertex_buffer = device.create_buffer_with_data(
             bytemuck::cast_slice(VERTICIES),
@@ -144,37 +114,6 @@ impl State {
 
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("texture_buffer_copy_encoder"),
-        });
-
-        encoder.copy_buffer_to_texture(
-            wgpu::BufferCopyView {
-                buffer: &buffer,
-                offset: 0,
-                bytes_per_row: 4 * dimensions.0,
-                rows_per_image: dimensions.1,
-            },
-            wgpu::TextureCopyView {
-                texture: &diffuse_texture,
-                mip_level: 0,
-                array_layer: 0,
-                origin: wgpu::Origin3d::ZERO
-            },
-            size2,
-        );
-
-        queue.submit(&[encoder.finish()]);
-        let diffuse_texture_view = diffuse_texture.create_default_view();
-
-        let diffuse_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Nearest,
-            lod_min_clamp: -100.0,
-            lod_max_clamp: 100.0,
-            compare: wgpu::CompareFunction::Always,
         });
 
         let texture_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -204,11 +143,11 @@ impl State {
             bindings: &[
                 wgpu::Binding {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&diffuse_texture_view),
+                    resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
                 },
                 wgpu::Binding {
                     binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&diffuse_sampler),
+                    resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
                 }
             ],
             label: Some("diffuse_bind_group"),
@@ -283,8 +222,6 @@ impl State {
             vertex_buffer,
             index_buffer,
             diffuse_texture,
-            diffuse_texture_view,
-            diffuse_sampler,
             diffuse_bind_group,
         }
     }
