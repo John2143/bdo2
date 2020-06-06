@@ -93,16 +93,44 @@ impl Vertex {
 unsafe impl bytemuck::Pod for Vertex {}
 unsafe impl bytemuck::Zeroable for Vertex {}
 
+/*
+ * 5 - - - - - 4
+ * | \         | \
+ * |   \       |   \
+ * |     1 - - - - - 0
+ * |     |     |     |
+ * |     |     |     |
+ * 6 - - | - - 7     |
+ *   \   |       \   |
+ *     \ |         \ |
+ *       2 - - - - - 3
+*/
+
 const VERTICIES: &[Vertex] = &[
     Vertex { position: [0.5, 0.5, 0.0], tex_coords: [1.0, 0.0] },
     Vertex { position: [-0.5, 0.5, 0.0], tex_coords: [0.0, 0.0] },
     Vertex { position: [-0.5, -0.5, 0.0], tex_coords: [0.0, 1.0] },
     Vertex { position: [0.5, -0.5, 0.0], tex_coords: [1.0, 1.0] },
+
+    Vertex { position: [0.5, 0.5, -1.0], tex_coords: [1.0, 0.0] },
+    Vertex { position: [-0.5, 0.5, -1.0], tex_coords: [0.0, 0.0] },
+    Vertex { position: [-0.5, -0.5, -1.0], tex_coords: [0.0, 1.0] },
+    Vertex { position: [0.5, -0.5, -1.0], tex_coords: [1.0, 1.0] },
 ];
 
 const INDICES: &[u16] = &[
-    0, 1, 2,
-    0, 2, 3,
+    0, 1, 2, // F - Top
+    0, 2, 3, // F - Bot (ends in bottom left)
+    2, 7, 3, // D - Top
+    2, 6, 7, // D - Bot
+    4, 5, 1, // U - Top
+    1, 0, 4, // U - Bot
+    1, 5, 6, // L - Top
+    1, 6, 2, // L - Bot
+    0, 3, 7, // R - Top
+    0, 7, 4, // R - Bot
+    5, 4, 7, // B - Top
+    5, 7, 6, // B - Bot
 ];
 
 impl State {
@@ -392,7 +420,7 @@ impl State {
         render_pass.set_bind_group(1, &self.uniform_bind_group, &[]);
         render_pass.set_vertex_buffer(0, &self.vertex_buffer, 0, 0);
         render_pass.set_index_buffer(&self.index_buffer, 0, 0);
-        render_pass.draw_indexed(0..6, 0, 0..1);
+        render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..1);
 
         drop(render_pass);
 
