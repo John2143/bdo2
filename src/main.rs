@@ -17,18 +17,22 @@ unsafe impl bytemuck::Pod for Uniforms {}
 unsafe impl bytemuck::Zeroable for Uniforms {}
 
 impl Uniforms {
-    pub fn new() -> Self {
+    pub fn update_view_proj(&mut self, camera: &camera::Camera) {
+        self.view_proj = camera.build_view_projection_matrix();
+    }
+}
+
+impl Default for Uniforms {
+    fn default() -> Self {
         use cgmath::SquareMatrix;
         Self {
             view_proj: cgmath::Matrix4::identity(),
         }
     }
 
-    pub fn update_view_proj(&mut self, camera: &camera::Camera) {
-        self.view_proj = camera.build_view_projection_matrix();
-    }
 }
 
+#[allow(dead_code)]
 struct State {
     surface: wgpu::Surface,
     adapter: wgpu::Adapter,
@@ -114,7 +118,7 @@ impl State {
             wgpu::BackendBit::PRIMARY, // Vulkan + Metal + DX12 + Browser WebGPU
         ).await.unwrap(); // Get used to seeing this
 
-        let (device, mut queue) = adapter.request_device(&wgpu::DeviceDescriptor {
+        let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor {
             extensions: wgpu::Extensions {
                 anisotropic_filtering: false,
             },
@@ -145,7 +149,7 @@ impl State {
             wgpu::BufferUsage::INDEX,
         );
 
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        let _encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("texture_buffer_copy_encoder"),
         });
 
@@ -190,7 +194,7 @@ impl State {
 
         let camera = camera::Camera::new(sc_desc.width as f32 / sc_desc.height as f32);
 
-        let mut uniforms = Uniforms::new();
+        let mut uniforms = Uniforms::default();
         uniforms.update_view_proj(&camera);
 
         let uniform_buffer = device.create_buffer_with_data(
@@ -317,12 +321,15 @@ impl State {
     // input() won't deal with GPU code, so it can be synchronous
     fn input(&mut self, event: &WindowEvent) -> bool {
 
-        if(self.camera_controller.process_events(event)){
+        if self.camera_controller.process_events(event) {
             return true;
         }
 
         match event {
-            WindowEvent::CursorMoved { position, .. } => {
+            WindowEvent::CursorMoved { position: _, .. } => {
+            },
+            WindowEvent::KeyboardInput { input, .. } => match input {
+                _ => {},
             },
             _ => {},
         }
@@ -395,7 +402,6 @@ impl State {
     }
 }
 
-use tokio;
 #[tokio::main]
 async fn main() -> () {
     let event_loop = EventLoop::new();
@@ -417,15 +423,15 @@ async fn main() -> () {
         } if window_id == window.id() => if !state.input(event){
             match event {
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                WindowEvent::KeyboardInput { input, .. } => match input {
+                WindowEvent::KeyboardInput { input, .. } => if let
                     KeyboardInput {
                         state: ElementState::Pressed,
                         virtual_keycode: Some(VirtualKeyCode::Escape),
                         ..
-                    } => *control_flow = ControlFlow::Exit,
-                    _ => {}
-                },
-                WindowEvent::Resized(physical_size) => {
+                    } = input {
+                        *control_flow = ControlFlow::Exit
+                    },
+                        WindowEvent::Resized(physical_size) => {
                     state.resize(*physical_size);
                 },
                 WindowEvent::ScaleFactorChanged { new_inner_size, ..} => {

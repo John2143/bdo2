@@ -8,7 +8,7 @@ pub struct Camera {
     zfar: f32,
 }
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
     1.0, 0.0, 0.0, 0.0,
     0.0, 1.0, 0.0, 0.0,
@@ -23,7 +23,7 @@ impl Camera {
             cgmath::perspective(cgmath::Deg(self.fovy),
             self.aspect, self.znear, self.zfar);
 
-        return OPENGL_TO_WGPU_MATRIX * proj * view;
+        OPENGL_TO_WGPU_MATRIX * proj * view
     }
 
     pub fn new(aspect: f32) -> Self {
@@ -56,8 +56,6 @@ pub struct CameraController {
 
 use winit::{
     event::*,
-    event_loop::{ControlFlow, EventLoop},
-    window::{Window, WindowBuilder},
 };
 
 impl CameraController {
@@ -139,7 +137,7 @@ impl CameraController {
 
     pub fn update_camera(&self, camera: &mut Camera, dt: std::time::Duration) {
         use cgmath::InnerSpace;
-        let forward = (camera.target - camera.eye);
+        let forward = camera.target - camera.eye;
         let forward = forward.normalize();
 
         let speed = self.speed * (dt.as_nanos() as f32 / 1_000_000.0);
