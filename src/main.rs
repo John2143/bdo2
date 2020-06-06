@@ -5,6 +5,29 @@ use winit::{
 };
 
 mod texture;
+mod camera;
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct Uniforms {
+    view_proj: cgmath::Matrix4<f32>,
+}
+
+unsafe impl bytemuck::Pod for Uniforms {}
+unsafe impl bytemuck::Zeroable for Uniforms {}
+
+impl Uniforms {
+    pub fn new() -> Self {
+        use cgmath::SquareMatrix;
+        Self {
+            view_proj: cgmath::Matrix4::identity(),
+        }
+    }
+
+    pub fn update_view_proj(&mut self, camera: &camera::Camera) {
+        self.view_proj = camera.build_view_projection_matrix();
+    }
+}
 
 struct State {
     surface: wgpu::Surface,
@@ -23,6 +46,16 @@ struct State {
     diffuse_bind_group: wgpu::BindGroup,
 
     size: winit::dpi::PhysicalSize<u32>,
+
+    camera: camera::Camera,
+    camera_controller: camera::CameraController,
+
+    uniforms: Uniforms,
+    uniform_buffer: wgpu::Buffer,
+    uniform_bind_group: wgpu::BindGroup,
+
+    start_time: std::time::Instant,
+    last_update: std::time::Instant,
 }
 
 #[repr(C)]
@@ -153,6 +186,44 @@ impl State {
             label: Some("diffuse_bind_group"),
         });
 
+        let camera_controller = camera::CameraController::new(0.02);
+
+        let camera = camera::Camera::new(sc_desc.width as f32 / sc_desc.height as f32);
+
+        let mut uniforms = Uniforms::new();
+        uniforms.update_view_proj(&camera);
+
+        let uniform_buffer = device.create_buffer_with_data(
+            bytemuck::cast_slice(&[uniforms]),
+            wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+        );
+
+        let uniform_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            bindings: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStage::VERTEX,
+                    ty: wgpu::BindingType::UniformBuffer {
+                        dynamic: false,
+                    }
+                }
+            ],
+            label: Some("uniform_bind_group_layout"),
+        });
+
+        let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &uniform_bind_group_layout,
+            bindings: &[
+                wgpu::Binding {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Buffer {
+                        buffer: &uniform_buffer,
+                        range: 0..std::mem::size_of_val(&uniforms) as wgpu::BufferAddress,
+                    }
+                }
+            ],
+            label: Some("uniform_bind_group"),
+        });
 
         let vs_src = include_str!("shader.vert");
         let fs_src = include_str!("shader.frag");
@@ -168,7 +239,7 @@ impl State {
         let fs_module = device.create_shader_module(&fs_data);
 
         let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            bind_group_layouts: &[&texture_bind_group_layout],
+            bind_group_layouts: &[&texture_bind_group_layout, &uniform_bind_group_layout],
         });
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -210,6 +281,9 @@ impl State {
             alpha_to_coverage_enabled: false,
         });
 
+        let last_update = std::time::Instant::now();
+        let start_time = std::time::Instant::now();
+
         Self {
             surface,
             adapter,
@@ -223,6 +297,13 @@ impl State {
             index_buffer,
             diffuse_texture,
             diffuse_bind_group,
+            uniform_buffer,
+            uniform_bind_group,
+            uniforms,
+            camera,
+            camera_controller,
+            last_update,
+            start_time,
         }
     }
 
@@ -235,6 +316,11 @@ impl State {
 
     // input() won't deal with GPU code, so it can be synchronous
     fn input(&mut self, event: &WindowEvent) -> bool {
+
+        if(self.camera_controller.process_events(event)){
+            return true;
+        }
+
         match event {
             WindowEvent::CursorMoved { position, .. } => {
             },
@@ -245,6 +331,28 @@ impl State {
     }
 
     fn update(&mut self) {
+        let dt = self.last_update.elapsed();
+	self.camera_controller.update_camera(&mut self.camera, dt);
+	self.uniforms.update_view_proj(&self.camera);
+
+	// Copy operation's are performed on the gpu, so we'll need
+	// a CommandEncoder for that
+	let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+	    label: Some("update encoder"),
+	});
+
+	let staging_buffer = self.device.create_buffer_with_data(
+	    bytemuck::cast_slice(&[self.uniforms]),
+	    wgpu::BufferUsage::COPY_SRC,
+	);
+
+	encoder.copy_buffer_to_buffer(&staging_buffer, 0, &self.uniform_buffer, 0, std::mem::size_of::<Uniforms>() as wgpu::BufferAddress);
+
+	// We need to remember to submit our CommandEncoder's output
+	// otherwise we won't see any change.
+	self.queue.submit(&[encoder.finish()]);
+
+        self.last_update = std::time::Instant::now();
     }
 
     fn render(&mut self) {
@@ -274,6 +382,7 @@ impl State {
 
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
+        render_pass.set_bind_group(1, &self.uniform_bind_group, &[]);
         render_pass.set_vertex_buffer(0, &self.vertex_buffer, 0, 0);
         render_pass.set_index_buffer(&self.index_buffer, 0, 0);
         render_pass.draw_indexed(0..6, 0, 0..1);
