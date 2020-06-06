@@ -4,6 +4,8 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
+pub type UserEventType = ();
+
 mod texture;
 mod camera;
 
@@ -218,7 +220,7 @@ impl State {
             label: Some("diffuse_bind_group"),
         });
 
-        let camera_controller = camera::CameraController::new(0.02);
+        let camera_controller = camera::CameraController::new(0.02, 5.0);
 
         let camera = camera::Camera::new(sc_desc.width as f32 / sc_desc.height as f32);
 
@@ -346,20 +348,10 @@ impl State {
         self.swap_chain = self.device.create_swap_chain(&self.surface, &self.sc_desc);
     }
 
-    // input() won't deal with GPU code, so it can be synchronous
-    fn input(&mut self, event: &WindowEvent) -> bool {
+    fn input(&mut self, event: &Event<UserEventType>) -> bool {
 
-        if self.camera_controller.process_events(event) {
+        if self.camera_controller.process_events(&event) {
             return true;
-        }
-
-        match event {
-            WindowEvent::CursorMoved { position: _, .. } => {
-            },
-            WindowEvent::KeyboardInput { input, .. } => match input {
-                _ => {},
-            },
-            _ => {},
         }
 
         false
@@ -435,39 +427,58 @@ async fn main() -> () {
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
 
-    let mut state = State::new(&window).await;
+    window.set_title("bdo2");
 
-    event_loop.run(move |event, _, control_flow| match event {
-        Event::RedrawRequested(_) => {
-            state.update();
-            state.render();
-        },
-        Event::MainEventsCleared => {
-            window.request_redraw();
-        },
-        Event::WindowEvent {
-            ref event,
-            window_id,
-        } if window_id == window.id() => if !state.input(event){
-            match event {
+    let mut state = State::new(&window).await;
+    let mut has_focus = true;
+    window.set_cursor_grab(has_focus);
+    window.set_cursor_visible(!has_focus);
+
+    event_loop.run(move |event, _, control_flow| {
+        match event {
+            Event::RedrawRequested(_) => {
+                state.update();
+                state.render();
+                return;
+            },
+            Event::MainEventsCleared => {
+                window.request_redraw();
+                return;
+            },
+            _ => {},
+        }
+
+        if has_focus && state.input(&event) {
+            return;
+        }
+
+        match event {
+            Event::WindowEvent {
+                ref event,
+                window_id,
+            } if window_id == window.id() => match event {
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                WindowEvent::KeyboardInput { input, .. } => if let
-                    KeyboardInput {
+                WindowEvent::KeyboardInput { input, .. } => if let KeyboardInput {
                         state: ElementState::Pressed,
                         virtual_keycode: Some(VirtualKeyCode::Escape),
                         ..
-                    } = input {
-                        *control_flow = ControlFlow::Exit
-                    },
-                        WindowEvent::Resized(physical_size) => {
+                } = input {
+                    *control_flow = ControlFlow::Exit
+                },
+                WindowEvent::Resized(physical_size) => {
                     state.resize(*physical_size);
                 },
                 WindowEvent::ScaleFactorChanged { new_inner_size, ..} => {
                     state.resize(**new_inner_size);
                 },
+                WindowEvent::Focused(focus) => {
+                    has_focus = *focus;
+                    window.set_cursor_grab(has_focus);
+                    window.set_cursor_visible(!has_focus);
+                },
                 _ => {}
-            }
-        },
-        _ => {}
+            },
+            _ => {}
+        }
     });
 }
