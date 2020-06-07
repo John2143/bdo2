@@ -24,6 +24,29 @@ impl Uniforms {
     }
 }
 
+struct Instance {
+    position: cgmath::Vector3<f32>,
+    rotation: cgmath::Quaternion<f32>,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct InstanceRaw {
+    model: cgmath::Matrix4<f32>,
+}
+
+impl Instance {
+    fn to_raw(&self) -> InstanceRaw {
+        InstanceRaw {
+            model: cgmath::Matrix4::from_translation(self.position)
+                * cgmath::Matrix4::from(self.rotation),
+        }
+    }
+}
+
+unsafe impl bytemuck::Pod for InstanceRaw {}
+unsafe impl bytemuck::Zeroable for InstanceRaw {}
+
 impl Default for Uniforms {
     fn default() -> Self {
         use cgmath::SquareMatrix;
@@ -61,6 +84,10 @@ struct State {
 
     start_time: std::time::Instant,
     last_update: std::time::Instant,
+    last_render: std::time::Instant,
+
+    instances: Vec<Instance>,
+    instance_buffer: wgpu::Buffer,
 }
 
 #[repr(C)]
@@ -246,6 +273,42 @@ impl State {
 
         let camera = camera::Camera::new(sc_desc.width as f32 / sc_desc.height as f32);
 
+        const NUM_INSTANCES_PER_ROW: u32 = 10;
+        const NUM_INSTANCES: u32 = NUM_INSTANCES_PER_ROW * NUM_INSTANCES_PER_ROW;
+        const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
+            NUM_INSTANCES_PER_ROW as f32 * 0.5,
+            0.0,
+            NUM_INSTANCES_PER_ROW as f32 * 0.5,
+        );
+
+        //make a 10 by 10 grid of objects
+        let instances: Vec<Instance> = (0..NUM_INSTANCES)
+            .flat_map(|z| {
+                (0..NUM_INSTANCES_PER_ROW).map(move |x| {
+                    let position = cgmath::Vector3 {
+                        x: (x)  as f32,
+                        y: 0.0,
+                        z: (z) as f32,
+                    } - INSTANCE_DISPLACEMENT;
+
+                    let rotation = cgmath::Rotation3::from_axis_angle(
+                            position.clone(),
+                            cgmath::Deg(0.0),
+                        );
+
+                    Instance { position, rotation }
+                })
+            })
+            .collect();
+
+        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
+        let instance_buffer_size =
+            instance_data.len() * std::mem::size_of::<cgmath::Matrix4<f32>>();
+        let instance_buffer = device.create_buffer_with_data(
+            bytemuck::cast_slice(&instance_data),
+            wgpu::BufferUsage::STORAGE_READ,
+        );
+
         let mut uniforms = Uniforms::default();
         uniforms.update_view_proj(&camera);
 
@@ -256,23 +319,42 @@ impl State {
 
         let uniform_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                bindings: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStage::VERTEX,
-                    ty: wgpu::BindingType::UniformBuffer { dynamic: false },
-                }],
+                bindings: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStage::VERTEX,
+                        ty: wgpu::BindingType::UniformBuffer { dynamic: false },
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStage::VERTEX,
+                        ty: wgpu::BindingType::StorageBuffer {
+                            dynamic: false,
+                            readonly: true, //todo change
+                        },
+                    },
+                ],
                 label: Some("uniform_bind_group_layout"),
             });
 
         let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &uniform_bind_group_layout,
-            bindings: &[wgpu::Binding {
-                binding: 0,
-                resource: wgpu::BindingResource::Buffer {
-                    buffer: &uniform_buffer,
-                    range: 0..std::mem::size_of_val(&uniforms) as wgpu::BufferAddress,
+            bindings: &[
+                wgpu::Binding {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Buffer {
+                        buffer: &uniform_buffer,
+                        range: 0..std::mem::size_of_val(&uniforms) as wgpu::BufferAddress,
+                    },
                 },
-            }],
+                wgpu::Binding {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Buffer {
+                        buffer: &instance_buffer,
+                        range: 0..instance_buffer_size as wgpu::BufferAddress,
+                    },
+                },
+            ],
             label: Some("uniform_bind_group"),
         });
 
@@ -347,6 +429,7 @@ impl State {
         });
 
         let last_update = std::time::Instant::now();
+        let last_render = std::time::Instant::now();
         let start_time = std::time::Instant::now();
 
         Self {
@@ -368,7 +451,10 @@ impl State {
             camera,
             camera_controller,
             last_update,
+            last_render,
             start_time,
+            instance_buffer,
+            instances,
         }
     }
 
@@ -389,6 +475,8 @@ impl State {
 
     fn update(&mut self) {
         let dt = self.last_update.elapsed();
+        let _ups = std::time::Duration::from_secs(1).as_nanos() as f32 / (dt.as_nanos() as f32);
+
         self.camera_controller.update_camera(&mut self.camera, dt);
         self.uniforms.update_view_proj(&self.camera);
 
@@ -421,6 +509,11 @@ impl State {
     }
 
     fn render(&mut self) {
+        let dt = self.last_render.elapsed();
+        let _fps = std::time::Duration::from_secs(1).as_nanos() as f32 / (dt.as_nanos() as f32);
+
+        std::thread::spawn(move || println!("{} fps", _fps));
+
         let frame = self.swap_chain.get_next_texture().unwrap();
 
         let mut encoder = self
@@ -450,11 +543,12 @@ impl State {
         render_pass.set_bind_group(1, &self.uniform_bind_group, &[]);
         render_pass.set_vertex_buffer(0, &self.vertex_buffer, 0, 0);
         render_pass.set_index_buffer(&self.index_buffer, 0, 0);
-        render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..1);
+        render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..100);
 
         drop(render_pass);
 
         self.queue.submit(&[encoder.finish()]);
+        self.last_render = std::time::Instant::now();
     }
 }
 
