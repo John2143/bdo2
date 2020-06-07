@@ -7,12 +7,20 @@ pub struct Texture {
 }
 
 impl Texture {
-    pub fn from_bytes(device: &wgpu::Device, bytes: &[u8], label: &str) -> Result<(Self, wgpu::CommandBuffer), failure::Error> {
+    pub fn from_bytes(
+        device: &wgpu::Device,
+        bytes: &[u8],
+        label: &str,
+    ) -> Result<(Self, wgpu::CommandBuffer), failure::Error> {
         let img = image::load_from_memory(bytes)?;
         Self::from_image(device, &img, Some(label))
     }
 
-    pub fn from_image(device: &wgpu::Device, img: &image::DynamicImage, label: Option<&str>) -> Result<(Self, wgpu::CommandBuffer), failure::Error> {
+    pub fn from_image(
+        device: &wgpu::Device,
+        img: &image::DynamicImage,
+        label: Option<&str>,
+    ) -> Result<(Self, wgpu::CommandBuffer), failure::Error> {
         let rgba = img.as_rgba8().unwrap();
         let dimensions = img.dimensions();
 
@@ -32,14 +40,9 @@ impl Texture {
             label: Some("texture"),
         });
 
-        let buffer = device.create_buffer_with_data(
-            &rgba,
-            wgpu::BufferUsage::COPY_SRC,
-        );
+        let buffer = device.create_buffer_with_data(&rgba, wgpu::BufferUsage::COPY_SRC);
 
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label,
-        });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label });
 
         encoder.copy_buffer_to_texture(
             wgpu::BufferCopyView {
@@ -72,6 +75,13 @@ impl Texture {
             compare: wgpu::CompareFunction::Always,
         });
 
-        Ok((Self { texture, view, sampler }, cmd_buffer))
+        Ok((
+            Self {
+                texture,
+                view,
+                sampler,
+            },
+            cmd_buffer,
+        ))
     }
 }

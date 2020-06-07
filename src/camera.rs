@@ -19,9 +19,7 @@ pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
 impl Camera {
     pub fn build_view_projection_matrix(&self) -> cgmath::Matrix4<f32> {
         let view = cgmath::Matrix4::look_at(self.eye, self.target, self.up);
-        let proj =
-            cgmath::perspective(cgmath::Deg(self.fovy),
-            self.aspect, self.znear, self.zfar);
+        let proj = cgmath::perspective(cgmath::Deg(self.fovy), self.aspect, self.znear, self.zfar);
 
         OPENGL_TO_WGPU_MATRIX * proj * view
     }
@@ -74,21 +72,22 @@ impl CameraController {
 
     pub fn process_events(&mut self, event: &Event<crate::UserEventType>) -> bool {
         match event {
-            Event::DeviceEvent {event, ..} => match event {
+            Event::DeviceEvent { event, .. } => match event {
                 DeviceEvent::MouseMotion { delta } => {
                     self.look_left_amt -= delta.0 as f32;
                     self.look_up_amt -= delta.1 as f32;
                     true
-                },
+                }
                 _ => false,
-            }
-            Event::WindowEvent {event, ..} => match event{
+            },
+            Event::WindowEvent { event, .. } => match event {
                 WindowEvent::KeyboardInput {
-                    input: KeyboardInput {
-                        state,
-                        virtual_keycode: Some(keycode),
-                        ..
-                    },
+                    input:
+                        KeyboardInput {
+                            state,
+                            virtual_keycode: Some(keycode),
+                            ..
+                        },
                     ..
                 } => {
                     let is_pressed = *state == ElementState::Pressed;
@@ -118,26 +117,26 @@ impl CameraController {
                             true
                         }
                         //VirtualKeyCode::Up => {
-                            //self.is_look_up_pressed = is_pressed;
-                            //true
+                        //self.is_look_up_pressed = is_pressed;
+                        //true
                         //}
                         //VirtualKeyCode::Left => {
-                            //self.is_look_left_pressed = is_pressed;
-                            //true
+                        //self.is_look_left_pressed = is_pressed;
+                        //true
                         //}
                         //VirtualKeyCode::Down => {
-                            //self.is_look_down_pressed = is_pressed;
-                            //true
+                        //self.is_look_down_pressed = is_pressed;
+                        //true
                         //}
                         //VirtualKeyCode::Right => {
-                            //self.is_look_right_pressed = is_pressed;
-                            //true
+                        //self.is_look_right_pressed = is_pressed;
+                        //true
                         //}
                         _ => false,
                     }
                 }
                 _ => false,
-            }
+            },
             _ => false,
         }
     }
@@ -182,8 +181,14 @@ impl CameraController {
 
         let look_vector = (camera.target - camera.eye).normalize();
 
-        let uprot: cgmath::Quaternion<f32> = cgmath::Rotation3::from_axis_angle(right, cgmath::Deg(self.look_up_amt * speed * self.sens));
-        let lrrot: cgmath::Quaternion<f32> = cgmath::Rotation3::from_axis_angle(right.cross(look_vector).normalize(), cgmath::Deg(self.look_left_amt * speed * self.sens));
+        let uprot: cgmath::Quaternion<f32> = cgmath::Rotation3::from_axis_angle(
+            right,
+            cgmath::Deg(self.look_up_amt * speed * self.sens),
+        );
+        let lrrot: cgmath::Quaternion<f32> = cgmath::Rotation3::from_axis_angle(
+            right.cross(look_vector).normalize(),
+            cgmath::Deg(self.look_left_amt * speed * self.sens),
+        );
 
         self.look_left_amt = 0.0;
         self.look_up_amt = 0.0;
