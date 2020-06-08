@@ -183,12 +183,32 @@ impl CameraController {
 
         let look_vector = (camera.target - camera.eye).normalize();
 
+        let angle_to_up = camera.up.angle(look_vector) - cgmath::Rad(f32::EPSILON);
+        let angle_to_down = (-camera.up).angle(look_vector) - cgmath::Rad(f32::EPSILON);
+
+        let change_up_angle: cgmath::Rad<f32> = cgmath::Deg(self.look_up_amt * speed * self.sens).into();
+
+
+        let change_up_angle = if angle_to_down < angle_to_up {
+            if angle_to_down < -change_up_angle {
+                angle_to_down
+            }else{
+                change_up_angle
+            }
+        }else{
+            if angle_to_up < change_up_angle {
+                angle_to_up
+            }else{
+                change_up_angle
+            }
+        };
+
         let uprot: cgmath::Quaternion<f32> = cgmath::Rotation3::from_axis_angle(
             right,
-            cgmath::Deg(self.look_up_amt * speed * self.sens),
+            change_up_angle,
         );
         let lrrot: cgmath::Quaternion<f32> = cgmath::Rotation3::from_axis_angle(
-            right.cross(look_vector).normalize(),
+            up.normalize(),
             cgmath::Deg(self.look_left_amt * speed * self.sens),
         );
 

@@ -286,11 +286,12 @@ impl State {
 
         let camera = camera::Camera::new(sc_desc.width as f32 / sc_desc.height as f32);
 
-        const NUM_INSTANCES_PER_ROW: u32 = 10;
+        const DIST: f32 = 2.0;
+        const NUM_INSTANCES_PER_ROW: u32 = 40;
         const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
-            NUM_INSTANCES_PER_ROW as f32 * 0.5,
+            NUM_INSTANCES_PER_ROW as f32 * DIST/2.0,
             0.0,
-            NUM_INSTANCES_PER_ROW as f32 * 0.5,
+            NUM_INSTANCES_PER_ROW as f32 * DIST/2.0,
         );
 
         //make a 10 by 10 grid of objects
@@ -298,14 +299,15 @@ impl State {
             .flat_map(|z| {
                 (0..NUM_INSTANCES_PER_ROW).map(move |x| {
                     let position = cgmath::Vector3 {
-                        x: (x * 2)  as f32,
-                        y: 0.0,
-                        z: (z * 2) as f32,
+                        x: x as f32 * DIST,
+                        y: (0) as f32,
+                        z: z as f32 * DIST,
                     } - INSTANCE_DISPLACEMENT;
 
+                    use cgmath::InnerSpace;
                     let rotation = cgmath::Rotation3::from_axis_angle(
-                            position.clone(),
-                            cgmath::Deg(0.0),
+                            position.clone().normalize(),
+                            cgmath::Deg(100.0),
                         );
 
                     Instance { position, rotation }
@@ -318,7 +320,7 @@ impl State {
             instance_data.len() * std::mem::size_of::<cgmath::Matrix4<f32>>();
         let instance_buffer = device.create_buffer_with_data(
             bytemuck::cast_slice(&instance_data),
-            wgpu::BufferUsage::STORAGE_READ,
+            wgpu::BufferUsage::STORAGE_READ | wgpu::BufferUsage::COPY_DST,
         );
 
         let mut uniforms = Uniforms::default();
