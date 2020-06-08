@@ -70,7 +70,7 @@ impl CameraController {
         }
     }
 
-    pub fn process_events(&mut self, event: &Event<crate::UserEventType>) -> bool {
+    pub fn process_events(&mut self, event: &Event<crate::engine::UserEventType>) -> bool {
         match event {
             Event::DeviceEvent { event, .. } => match event {
                 DeviceEvent::MouseMotion { delta } => {
