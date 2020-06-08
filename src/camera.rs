@@ -30,9 +30,9 @@ impl Camera {
             target: (0.0, 0.0, 0.0).into(),
             up: cgmath::Vector3::unit_y(),
             aspect,
-            fovy: 190.0 / aspect,
+            fovy: 100.0 / aspect,
             znear: 0.1,
-            zfar: 100.0,
+            zfar: 10000.0,
         }
     }
 }
@@ -77,7 +77,9 @@ impl CameraController {
                     self.look_left_amt -= delta.0 as f32;
                     self.look_up_amt -= delta.1 as f32;
                     true
-                }
+                },
+                //DeviceEvent::Button { button, state } => {
+                //},
                 _ => false,
             },
             Event::WindowEvent { event, .. } => match event {

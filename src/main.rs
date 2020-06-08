@@ -13,6 +13,8 @@ mod texture;
 #[derive(Copy, Clone, Debug)]
 pub struct Uniforms {
     view_proj: cgmath::Matrix4<f32>,
+    dt: f32,
+    t: f32,
 }
 
 unsafe impl bytemuck::Pod for Uniforms {}
@@ -21,6 +23,24 @@ unsafe impl bytemuck::Zeroable for Uniforms {}
 impl Uniforms {
     pub fn update_view_proj(&mut self, camera: &camera::Camera) {
         self.view_proj = camera.build_view_projection_matrix();
+    }
+
+    pub fn update_time(&mut self, dt: &std::time::Duration, t: &std::time::Duration) {
+        self.dt = dt.as_millis() as f32;
+        self.dt /= 1000.0;
+        self.t = t.as_millis() as f32;
+        self.t /= 1000.0;
+    }
+}
+
+impl Default for Uniforms {
+    fn default() -> Self {
+        use cgmath::SquareMatrix;
+        Self {
+            view_proj: cgmath::Matrix4::identity(),
+            t: 0.0,
+            dt: 0.0,
+        }
     }
 }
 
@@ -46,15 +66,6 @@ impl Instance {
 
 unsafe impl bytemuck::Pod for InstanceRaw {}
 unsafe impl bytemuck::Zeroable for InstanceRaw {}
-
-impl Default for Uniforms {
-    fn default() -> Self {
-        use cgmath::SquareMatrix;
-        Self {
-            view_proj: cgmath::Matrix4::identity(),
-        }
-    }
-}
 
 #[allow(dead_code)]
 struct State {
@@ -88,6 +99,8 @@ struct State {
 
     instances: Vec<Instance>,
     instance_buffer: wgpu::Buffer,
+
+    depth_texture: texture::Texture,
 }
 
 #[repr(C)]
@@ -194,10 +207,10 @@ impl State {
                 power_preference: wgpu::PowerPreference::Default,
                 compatible_surface: Some(&surface),
             },
-            wgpu::BackendBit::PRIMARY, // Vulkan + Metal + DX12 + Browser WebGPU
+            wgpu::BackendBit::PRIMARY,
         )
         .await
-        .unwrap(); // Get used to seeing this
+        .unwrap();
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
@@ -274,7 +287,6 @@ impl State {
         let camera = camera::Camera::new(sc_desc.width as f32 / sc_desc.height as f32);
 
         const NUM_INSTANCES_PER_ROW: u32 = 10;
-        const NUM_INSTANCES: u32 = NUM_INSTANCES_PER_ROW * NUM_INSTANCES_PER_ROW;
         const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
             NUM_INSTANCES_PER_ROW as f32 * 0.5,
             0.0,
@@ -282,13 +294,13 @@ impl State {
         );
 
         //make a 10 by 10 grid of objects
-        let instances: Vec<Instance> = (0..NUM_INSTANCES)
+        let instances: Vec<Instance> = (0..NUM_INSTANCES_PER_ROW)
             .flat_map(|z| {
                 (0..NUM_INSTANCES_PER_ROW).map(move |x| {
                     let position = cgmath::Vector3 {
-                        x: (x)  as f32,
+                        x: (x * 2)  as f32,
                         y: 0.0,
-                        z: (z) as f32,
+                        z: (z * 2) as f32,
                     } - INSTANCE_DISPLACEMENT;
 
                     let rotation = cgmath::Rotation3::from_axis_angle(
@@ -418,7 +430,15 @@ impl State {
             }],
 
             primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-            depth_stencil_state: None,
+            depth_stencil_state: Some(wgpu::DepthStencilStateDescriptor {
+                format: texture::Texture::DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil_front: wgpu::StencilStateFaceDescriptor::IGNORE,
+                stencil_back: wgpu::StencilStateFaceDescriptor::IGNORE,
+                stencil_write_mask: 0,
+                stencil_read_mask: 0,
+            }),
             vertex_state: wgpu::VertexStateDescriptor {
                 index_format: wgpu::IndexFormat::Uint16,
                 vertex_buffers: &[Vertex::desc()],
@@ -427,6 +447,8 @@ impl State {
             sample_mask: !0,
             alpha_to_coverage_enabled: false,
         });
+
+        let depth_texture = texture::Texture::create_depth_texture(&device, &sc_desc, "depth_texture");
 
         let last_update = std::time::Instant::now();
         let last_render = std::time::Instant::now();
@@ -455,6 +477,7 @@ impl State {
             start_time,
             instance_buffer,
             instances,
+            depth_texture,
         }
     }
 
@@ -463,6 +486,7 @@ impl State {
         self.sc_desc.width = new_size.width;
         self.sc_desc.height = new_size.height;
         self.swap_chain = self.device.create_swap_chain(&self.surface, &self.sc_desc);
+        self.depth_texture = texture::Texture::create_depth_texture(&self.device, &self.sc_desc, "depth_texture");
     }
 
     fn input(&mut self, event: &Event<UserEventType>) -> bool {
@@ -479,6 +503,22 @@ impl State {
 
         self.camera_controller.update_camera(&mut self.camera, dt);
         self.uniforms.update_view_proj(&self.camera);
+
+        for (_i, _instance) in self.instances.iter_mut().enumerate() {
+            ////TODO figure out how to copy into gpu memory
+            //instance.position += (1.0 / _ups) * cgmath::Vector3::unit_y();
+        }
+
+        self.last_update = std::time::Instant::now();
+    }
+
+    fn render(&mut self) {
+        let dt = self.last_render.elapsed();
+        let _fps = std::time::Duration::from_secs(1).as_nanos() as f32 / (dt.as_nanos() as f32);
+
+        //std::thread::spawn(move || println!("{} fps", _fps));
+
+        self.uniforms.update_time(&dt, &self.start_time.elapsed());
 
         // Copy operation's are performed on the gpu, so we'll need
         // a CommandEncoder for that
@@ -505,16 +545,6 @@ impl State {
         // otherwise we won't see any change.
         self.queue.submit(&[encoder.finish()]);
 
-        self.last_update = std::time::Instant::now();
-    }
-
-    fn render(&mut self) {
-        let dt = self.last_render.elapsed();
-        let _fps = std::time::Duration::from_secs(1).as_nanos() as f32 / (dt.as_nanos() as f32);
-
-        std::thread::spawn(move || println!("{} fps", _fps));
-
-        let frame = self.swap_chain.get_next_texture().unwrap();
 
         let mut encoder = self
             .device
@@ -522,6 +552,7 @@ impl State {
                 label: Some("Render Encoder"),
             });
 
+        let frame = self.swap_chain.get_next_texture().unwrap();
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                 attachment: &frame.view,
@@ -535,7 +566,15 @@ impl State {
                     a: 1.0,
                 },
             }],
-            depth_stencil_attachment: None,
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
+                attachment: &self.depth_texture.view,
+                depth_load_op: wgpu::LoadOp::Clear,
+                depth_store_op: wgpu::StoreOp::Store,
+                clear_depth: 1.0,
+                stencil_load_op: wgpu::LoadOp::Clear,
+                stencil_store_op: wgpu::StoreOp::Store,
+                clear_stencil: 0,
+            }),
         });
 
         render_pass.set_pipeline(&self.render_pipeline);
@@ -543,7 +582,7 @@ impl State {
         render_pass.set_bind_group(1, &self.uniform_bind_group, &[]);
         render_pass.set_vertex_buffer(0, &self.vertex_buffer, 0, 0);
         render_pass.set_index_buffer(&self.index_buffer, 0, 0);
-        render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..100);
+        render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..(self.instances.len() as u32));
 
         drop(render_pass);
 
@@ -561,7 +600,7 @@ async fn main() -> () {
 
     let mut state = State::new(&window).await;
     let mut has_focus = true;
-    window.set_cursor_grab(has_focus);
+    window.set_cursor_grab(has_focus).unwrap();
     window.set_cursor_visible(!has_focus);
 
     event_loop.run(move |event, _, control_flow| {
@@ -584,9 +623,9 @@ async fn main() -> () {
 
         match event {
             Event::WindowEvent {
-                ref event,
+                event,
                 window_id,
-            } if window_id == window.id() => match event {
+            } if window_id == window.id() => match &event {
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
                 WindowEvent::KeyboardInput { input, .. } => {
                     if let KeyboardInput {
@@ -606,7 +645,7 @@ async fn main() -> () {
                 }
                 WindowEvent::Focused(focus) => {
                     has_focus = *focus;
-                    window.set_cursor_grab(has_focus);
+                    window.set_cursor_grab(has_focus).unwrap();
                     window.set_cursor_visible(!has_focus);
                 }
                 _ => {}
