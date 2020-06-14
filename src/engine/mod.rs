@@ -98,7 +98,7 @@ struct State {
     instances: Vec<Instance>,
     instance_buffer: wgpu::Buffer,
 
-    obj_model: model::Model,
+    models: Vec<model::Model>,
 
     depth_texture: texture::Texture,
 }
@@ -388,7 +388,7 @@ impl State {
             instances,
             depth_texture,
 
-            obj_model,
+            models: vec![obj_model],
         }
     }
 
@@ -480,11 +480,14 @@ impl State {
 
         render_pass.set_pipeline(&self.render_pipeline);
         use model::DrawModel;
-        render_pass.draw_model_instanced(
-            &self.obj_model,
-            0..self.instances.len() as u32,
-            &self.uniform_bind_group,
-        );
+
+        for model in self.models.iter() {
+            render_pass.draw_model_instanced(
+                model,
+                0..self.instances.len() as u32,
+                &self.uniform_bind_group,
+            );
+        }
 
         drop(render_pass);
 
