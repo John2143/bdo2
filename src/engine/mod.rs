@@ -193,11 +193,12 @@ impl State {
 
         const DIST: f32 = 4.0;
         const NUM_INSTANCES_PER_ROW: u32 = 100;
-        let INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
+        const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
             NUM_INSTANCES_PER_ROW as f32 * DIST / 2.0,
             0.0,
             NUM_INSTANCES_PER_ROW as f32 * DIST / 2.0,
-        ) - cgmath::Vector3::new(0.1, 0.1, 0.1);
+        );
+        const INSTANCE_OFFSET: cgmath::Vector3<f32> = cgmath::Vector3::new(0.1, 0.1, 0.1);
 
         //make a 10 by 10 grid of objects
         let instances: Vec<Instance> = (0..NUM_INSTANCES_PER_ROW)
@@ -207,7 +208,7 @@ impl State {
                         x: x as f32 * DIST,
                         y: (0) as f32,
                         z: z as f32 * DIST,
-                    } - INSTANCE_DISPLACEMENT;
+                    } - INSTANCE_DISPLACEMENT + INSTANCE_OFFSET;
 
                     use cgmath::InnerSpace;
                     let rotation = cgmath::Rotation3::from_axis_angle(
@@ -452,16 +453,6 @@ impl State {
             std::mem::size_of::<Uniforms>() as wgpu::BufferAddress,
         );
 
-        // We need to remember to submit our CommandEncoder's output
-        // otherwise we won't see any change.
-        self.queue.submit(&[encoder.finish()]);
-
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Render Encoder"),
-            });
-
         let frame = self.swap_chain.get_next_texture().unwrap();
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
@@ -488,21 +479,12 @@ impl State {
         });
 
         render_pass.set_pipeline(&self.render_pipeline);
-        //render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
-        //render_pass.set_bind_group(1, &self.uniform_bind_group, &[]);
-
-        let mesh = &self.obj_model.meshes[0];
-        let material = &self.obj_model.materials[mesh.material];
         use model::DrawModel;
-        render_pass.draw_mesh_instanced(
-            mesh,
-            material,
+        render_pass.draw_model_instanced(
+            &self.obj_model,
             0..self.instances.len() as u32,
             &self.uniform_bind_group,
         );
-        //render_pass.set_vertex_buffer(0, &self.vertex_buffer, 0, 0);
-        //render_pass.set_index_buffer(&self.index_buffer, 0, 0);
-        //render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..(self.instances.len() as u32));
 
         drop(render_pass);
 

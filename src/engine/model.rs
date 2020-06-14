@@ -161,6 +161,13 @@ where
         instances: Range<u32>,
         uniforms: &'b wgpu::BindGroup,
     );
+    fn draw_model(&mut self, model: &'b Model, uniforms: &'b wgpu::BindGroup);
+    fn draw_model_instanced(
+        &mut self,
+        model: &'b Model,
+        instances: Range<u32>,
+        uniforms: &'b wgpu::BindGroup,
+    );
 }
 
 impl<'a, 'b> DrawModel<'a, 'b> for wgpu::RenderPass<'a>
@@ -183,5 +190,21 @@ where
         self.set_bind_group(0, &material.bind_group, &[]);
         self.set_bind_group(1, &uniforms, &[]);
         self.draw_indexed(0..mesh.num_elements, 0, instances);
+    }
+
+    fn draw_model(&mut self, model: &'b Model, uniforms: &'b wgpu::BindGroup) {
+        self.draw_model_instanced(model, 0..1, uniforms);
+    }
+
+    fn draw_model_instanced(
+        &mut self,
+        model: &'b Model,
+        instances: Range<u32>,
+        uniforms: &'b wgpu::BindGroup,
+    ) {
+        for mesh in &model.meshes {
+            let material = &model.materials[mesh.material];
+            self.draw_mesh_instanced(mesh, material, instances.clone(), uniforms);
+        }
     }
 }
