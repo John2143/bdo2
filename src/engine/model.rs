@@ -71,7 +71,7 @@ impl Model {
         layout: &wgpu::BindGroupLayout,
         path: P,
     ) -> Result<(Self, Vec<wgpu::CommandBuffer>), failure::Error> {
-        let (obj_models, obj_materials) = tobj::load_obj(path.as_ref(), false)?;
+        let (obj_models, obj_materials) = tobj::load_obj(path.as_ref(), true)?;
 
         // We're assuming that the texture files are stored with the obj file
         let containing_folder = path.as_ref().parent().unwrap();
