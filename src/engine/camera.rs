@@ -77,7 +77,7 @@ impl CameraController {
                     self.look_left_amt -= delta.0 as f32;
                     self.look_up_amt -= delta.1 as f32;
                     true
-                },
+                }
                 //DeviceEvent::Button { button, state } => {
                 //},
                 _ => false,
@@ -143,6 +143,7 @@ impl CameraController {
         }
     }
 
+    ///This function should be run on update, not render. Allows for intra-frame targeting.
     pub fn update_camera(&mut self, camera: &mut Camera, dt: std::time::Duration) {
         use cgmath::InnerSpace;
         let forward = camera.target - camera.eye;
@@ -181,32 +182,35 @@ impl CameraController {
             camera.target -= up * speed;
         }
 
+        //this whole system kind of sucks. look speed is broken on different framrates. something
+        //about dt calculation is probably off. This is run on update, not render.
         let look_vector = (camera.target - camera.eye).normalize();
 
-        let angle_to_up = camera.up.angle(look_vector) - cgmath::Rad(f32::EPSILON);
-        let angle_to_down = (-camera.up).angle(look_vector) - cgmath::Rad(f32::EPSILON);
+        let angle_to_up = camera.up.angle(look_vector) - cgmath::Rad(f32::EPSILON * 5.0);
+        let angle_to_down = (-camera.up).angle(look_vector) - cgmath::Rad(f32::EPSILON * 5.0);
 
-        let change_up_angle: cgmath::Rad<f32> = cgmath::Deg(self.look_up_amt * speed * self.sens).into();
+        //println!("yaw: {:?}", cgmath::Deg::from((-camera.up).angle(look_vector)));
 
+        let change_up_angle: cgmath::Rad<f32> =
+            cgmath::Deg(self.look_up_amt * speed * self.sens).into();
 
         let change_up_angle = if angle_to_down < angle_to_up {
             if angle_to_down < -change_up_angle {
                 angle_to_down
-            }else{
+            } else {
                 change_up_angle
             }
-        }else{
+        } else {
             if angle_to_up < change_up_angle {
                 angle_to_up
-            }else{
+            } else {
                 change_up_angle
             }
         };
 
-        let uprot: cgmath::Quaternion<f32> = cgmath::Rotation3::from_axis_angle(
-            right,
-            change_up_angle,
-        );
+        let uprot: cgmath::Quaternion<f32> =
+            cgmath::Rotation3::from_axis_angle(right, change_up_angle);
+
         let lrrot: cgmath::Quaternion<f32> = cgmath::Rotation3::from_axis_angle(
             up.normalize(),
             cgmath::Deg(self.look_left_amt * speed * self.sens),
@@ -215,6 +219,6 @@ impl CameraController {
         self.look_left_amt = 0.0;
         self.look_up_amt = 0.0;
 
-        camera.target = camera.eye + uprot * lrrot * look_vector;
+        camera.target = camera.eye + lrrot * uprot * look_vector;
     }
 }

@@ -7,6 +7,7 @@ use winit::{
 pub type UserEventType = ();
 
 mod camera;
+mod model;
 mod texture;
 
 #[repr(C)]
@@ -78,9 +79,6 @@ struct State {
 
     render_pipeline: wgpu::RenderPipeline,
 
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
-
     diffuse_texture: texture::Texture,
     diffuse_bind_group: wgpu::BindGroup,
 
@@ -100,102 +98,10 @@ struct State {
     instances: Vec<Instance>,
     instance_buffer: wgpu::Buffer,
 
+    obj_model: model::Model,
+
     depth_texture: texture::Texture,
 }
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug)]
-struct Vertex {
-    position: [f32; 3],
-    tex_coords: [f32; 2],
-}
-
-impl Vertex {
-    fn desc<'a>() -> wgpu::VertexBufferDescriptor<'a> {
-        wgpu::VertexBufferDescriptor {
-            stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::InputStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttributeDescriptor {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float3,
-                },
-                wgpu::VertexAttributeDescriptor {
-                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float2,
-                },
-            ],
-        }
-    }
-}
-
-unsafe impl bytemuck::Pod for Vertex {}
-unsafe impl bytemuck::Zeroable for Vertex {}
-
-/*
- * 5 - - - - - 4
- * | \         | \
- * |   \       |   \
- * |     1 - - - - - 0
- * |     |     |     |
- * |     |     |     |
- * 6 - - | - - 7     |
- *   \   |       \   |
- *     \ |         \ |
- *       2 - - - - - 3
-*/
-
-const VERTICIES: &[Vertex] = &[
-    Vertex {
-        position: [0.5, 0.5, 0.0],
-        tex_coords: [1.0, 0.0],
-    },
-    Vertex {
-        position: [-0.5, 0.5, 0.0],
-        tex_coords: [0.0, 0.0],
-    },
-    Vertex {
-        position: [-0.5, -0.5, 0.0],
-        tex_coords: [0.0, 1.0],
-    },
-    Vertex {
-        position: [0.5, -0.5, 0.0],
-        tex_coords: [1.0, 1.0],
-    },
-    Vertex {
-        position: [0.5, 0.5, -1.0],
-        tex_coords: [1.0, 0.0],
-    },
-    Vertex {
-        position: [-0.5, 0.5, -1.0],
-        tex_coords: [0.0, 0.0],
-    },
-    Vertex {
-        position: [-0.5, -0.5, -1.0],
-        tex_coords: [0.0, 1.0],
-    },
-    Vertex {
-        position: [0.5, -0.5, -1.0],
-        tex_coords: [1.0, 1.0],
-    },
-];
-
-const INDICES: &[u16] = &[
-    0, 1, 2, // F - Top
-    0, 2, 3, // F - Bot (ends in bottom left)
-    2, 7, 3, // D - Top
-    2, 6, 7, // D - Bot
-    4, 5, 1, // U - Top
-    1, 0, 4, // U - Bot
-    1, 5, 6, // L - Top
-    1, 6, 2, // L - Bot
-    0, 3, 7, // R - Top
-    0, 7, 4, // R - Bot
-    5, 4, 7, // B - Top
-    5, 7, 6, // B - Bot
-];
 
 impl State {
     async fn new(window: &Window) -> Self {
@@ -235,12 +141,6 @@ impl State {
             texture::Texture::from_bytes(&device, diffuse_bytes, "pip").unwrap();
 
         queue.submit(&[cmd_buffer]);
-
-        let vertex_buffer = device
-            .create_buffer_with_data(bytemuck::cast_slice(VERTICIES), wgpu::BufferUsage::VERTEX);
-
-        let index_buffer =
-            device.create_buffer_with_data(bytemuck::cast_slice(INDICES), wgpu::BufferUsage::INDEX);
 
         let _encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("texture_buffer_copy_encoder"),
@@ -286,13 +186,18 @@ impl State {
 
         let camera = camera::Camera::new(sc_desc.width as f32 / sc_desc.height as f32);
 
-        const DIST: f32 = 2.0;
-        const NUM_INSTANCES_PER_ROW: u32 = 40;
-        const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
-            NUM_INSTANCES_PER_ROW as f32 * DIST/2.0,
+        let (obj_model, cmds) =
+            model::Model::load(&device, &texture_bind_group_layout, "models/cube.obj").unwrap();
+
+        queue.submit(&cmds);
+
+        const DIST: f32 = 4.0;
+        const NUM_INSTANCES_PER_ROW: u32 = 100;
+        let INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
+            NUM_INSTANCES_PER_ROW as f32 * DIST / 2.0,
             0.0,
-            NUM_INSTANCES_PER_ROW as f32 * DIST/2.0,
-        );
+            NUM_INSTANCES_PER_ROW as f32 * DIST / 2.0,
+        ) - cgmath::Vector3::new(0.1, 0.1, 0.1);
 
         //make a 10 by 10 grid of objects
         let instances: Vec<Instance> = (0..NUM_INSTANCES_PER_ROW)
@@ -306,9 +211,9 @@ impl State {
 
                     use cgmath::InnerSpace;
                     let rotation = cgmath::Rotation3::from_axis_angle(
-                            position.clone().normalize(),
-                            cgmath::Deg(100.0),
-                        );
+                        position.clone().normalize(),
+                        cgmath::Deg(100.0),
+                    );
 
                     Instance { position, rotation }
                 })
@@ -406,6 +311,8 @@ impl State {
                 bind_group_layouts: &[&texture_bind_group_layout, &uniform_bind_group_layout],
             });
 
+        use crate::engine::model::Vertex;
+
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             layout: &render_pipeline_layout,
             vertex_stage: wgpu::ProgrammableStageDescriptor {
@@ -442,15 +349,16 @@ impl State {
                 stencil_read_mask: 0,
             }),
             vertex_state: wgpu::VertexStateDescriptor {
-                index_format: wgpu::IndexFormat::Uint16,
-                vertex_buffers: &[Vertex::desc()],
+                index_format: wgpu::IndexFormat::Uint32,
+                vertex_buffers: &[model::ModelVertex::desc()],
             },
             sample_count: 1,
             sample_mask: !0,
             alpha_to_coverage_enabled: false,
         });
 
-        let depth_texture = texture::Texture::create_depth_texture(&device, &sc_desc, "depth_texture");
+        let depth_texture =
+            texture::Texture::create_depth_texture(&device, &sc_desc, "depth_texture");
 
         let last_update = std::time::Instant::now();
         let last_render = std::time::Instant::now();
@@ -465,8 +373,6 @@ impl State {
             swap_chain,
             render_pipeline,
             size,
-            vertex_buffer,
-            index_buffer,
             diffuse_texture,
             diffuse_bind_group,
             uniform_buffer,
@@ -480,6 +386,8 @@ impl State {
             instance_buffer,
             instances,
             depth_texture,
+
+            obj_model,
         }
     }
 
@@ -488,7 +396,8 @@ impl State {
         self.sc_desc.width = new_size.width;
         self.sc_desc.height = new_size.height;
         self.swap_chain = self.device.create_swap_chain(&self.surface, &self.sc_desc);
-        self.depth_texture = texture::Texture::create_depth_texture(&self.device, &self.sc_desc, "depth_texture");
+        self.depth_texture =
+            texture::Texture::create_depth_texture(&self.device, &self.sc_desc, "depth_texture");
     }
 
     fn input(&mut self, event: &Event<UserEventType>) -> bool {
@@ -547,7 +456,6 @@ impl State {
         // otherwise we won't see any change.
         self.queue.submit(&[encoder.finish()]);
 
-
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -580,11 +488,21 @@ impl State {
         });
 
         render_pass.set_pipeline(&self.render_pipeline);
-        render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
-        render_pass.set_bind_group(1, &self.uniform_bind_group, &[]);
-        render_pass.set_vertex_buffer(0, &self.vertex_buffer, 0, 0);
-        render_pass.set_index_buffer(&self.index_buffer, 0, 0);
-        render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..(self.instances.len() as u32));
+        //render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
+        //render_pass.set_bind_group(1, &self.uniform_bind_group, &[]);
+
+        let mesh = &self.obj_model.meshes[0];
+        let material = &self.obj_model.materials[mesh.material];
+        use model::DrawModel;
+        render_pass.draw_mesh_instanced(
+            mesh,
+            material,
+            0..self.instances.len() as u32,
+            &self.uniform_bind_group,
+        );
+        //render_pass.set_vertex_buffer(0, &self.vertex_buffer, 0, 0);
+        //render_pass.set_index_buffer(&self.index_buffer, 0, 0);
+        //render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..(self.instances.len() as u32));
 
         drop(render_pass);
 
@@ -623,10 +541,7 @@ pub async fn main() -> () {
         }
 
         match event {
-            Event::WindowEvent {
-                event,
-                window_id,
-            } if window_id == window.id() => match &event {
+            Event::WindowEvent { event, window_id } if window_id == window.id() => match &event {
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
                 WindowEvent::KeyboardInput { input, .. } => {
                     if let KeyboardInput {

@@ -1,4 +1,5 @@
 use image::GenericImageView;
+use std::path::Path;
 
 pub struct Texture {
     pub texture: wgpu::Texture,
@@ -6,11 +7,18 @@ pub struct Texture {
     pub sampler: wgpu::Sampler,
 }
 
-impl Texture {
-    pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float; // 1.
+type TextureInfo = (Texture, wgpu::CommandBuffer);
+type LoadResult = Result<TextureInfo, failure::Error>;
 
-    pub fn create_depth_texture(device: &wgpu::Device, sc_desc: &wgpu::SwapChainDescriptor, label: &str) -> Self {
-        let size = wgpu::Extent3d { // 2.
+impl Texture {
+    pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+
+    pub fn create_depth_texture(
+        device: &wgpu::Device,
+        sc_desc: &wgpu::SwapChainDescriptor,
+        label: &str,
+    ) -> Self {
+        let size = wgpu::Extent3d {
             width: sc_desc.width,
             height: sc_desc.height,
             depth: 1,
@@ -23,14 +31,14 @@ impl Texture {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: Self::DEPTH_FORMAT,
-            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT // 3.
-                | wgpu::TextureUsage::SAMPLED 
+            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT
+                | wgpu::TextureUsage::SAMPLED
                 | wgpu::TextureUsage::COPY_SRC,
         };
         let texture = device.create_texture(&desc);
 
         let view = texture.create_default_view();
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor { // 4.
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
@@ -39,16 +47,16 @@ impl Texture {
             mipmap_filter: wgpu::FilterMode::Nearest,
             lod_min_clamp: -100.0,
             lod_max_clamp: 100.0,
-            compare: wgpu::CompareFunction::LessEqual, // 5.
+            compare: wgpu::CompareFunction::LessEqual,
         });
 
-        Self { texture, view, sampler }
+        Self {
+            texture,
+            view,
+            sampler,
+        }
     }
-    pub fn from_bytes(
-        device: &wgpu::Device,
-        bytes: &[u8],
-        label: &str,
-    ) -> Result<(Self, wgpu::CommandBuffer), failure::Error> {
+    pub fn from_bytes(device: &wgpu::Device, bytes: &[u8], label: &str) -> LoadResult {
         let img = image::load_from_memory(bytes)?;
         Self::from_image(device, &img, Some(label))
     }
@@ -57,7 +65,7 @@ impl Texture {
         device: &wgpu::Device,
         img: &image::DynamicImage,
         label: Option<&str>,
-    ) -> Result<(Self, wgpu::CommandBuffer), failure::Error> {
+    ) -> LoadResult {
         let rgba = img.as_rgba8().unwrap();
         let dimensions = img.dimensions();
 
@@ -120,5 +128,30 @@ impl Texture {
             },
             cmd_buffer,
         ))
+    }
+
+    pub fn load<P: AsRef<Path>>(device: &wgpu::Device, path: P) -> LoadResult {
+        // Needed to appease the borrow checker
+        let path_copy = path.as_ref().to_path_buf();
+        println!("Loading {:?}", &path_copy);
+        let label = path_copy.to_str();
+
+        let img = image::open(path)?;
+
+        //match img {
+        //image::DynamicImage::ImageLuma8( .. ) => println!("image::DynamicImage::ImageLuma8"),
+        //image::DynamicImage::ImageLumaA8( .. ) => println!("image::DynamicImage::ImageLumaA8"),
+        //image::DynamicImage::ImageRgb8( .. ) => println!("image::DynamicImage::ImageRgb8"),
+        //image::DynamicImage::ImageRgba8( .. ) => println!("image::DynamicImage::ImageRgba8"),
+        //image::DynamicImage::ImageBgr8( .. ) => println!("image::DynamicImage::ImageBgr8"),
+        //image::DynamicImage::ImageBgra8( .. ) => println!("image::DynamicImage::ImageBgra8"),
+        //image::DynamicImage::ImageLuma16( .. ) => println!("image::DynamicImage::ImageLuma16"),
+        //image::DynamicImage::ImageLumaA16( .. ) => println!("image::DynamicImage::ImageLumaA16"),
+        //image::DynamicImage::ImageRgb16( .. ) => println!("image::DynamicImage::ImageRgb16"),
+        //image::DynamicImage::ImageRgba16( .. ) => println!("image::DynamicImage::ImageRgba16"),
+        //_ => println!("idk"),
+        //};
+
+        Self::from_image(device, &img, label)
     }
 }
