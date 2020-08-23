@@ -208,7 +208,8 @@ impl State {
                         x: x as f32 * DIST,
                         y: (0) as f32,
                         z: z as f32 * DIST,
-                    } - INSTANCE_DISPLACEMENT + INSTANCE_OFFSET;
+                    } - INSTANCE_DISPLACEMENT
+                        + INSTANCE_OFFSET;
 
                     use cgmath::InnerSpace;
                     let rotation = cgmath::Rotation3::from_axis_angle(
@@ -399,6 +400,7 @@ impl State {
         self.swap_chain = self.device.create_swap_chain(&self.surface, &self.sc_desc);
         self.depth_texture =
             texture::Texture::create_depth_texture(&self.device, &self.sc_desc, "depth_texture");
+        self.camera.aspect = self.sc_desc.width as f32 / self.sc_desc.height as f32;
     }
 
     fn input(&mut self, event: &Event<UserEventType>) -> bool {
@@ -452,6 +454,19 @@ impl State {
             0,
             std::mem::size_of::<Uniforms>() as wgpu::BufferAddress,
         );
+
+        //let staging_buffer = self.device.create_buffer_with_data(
+        //bytemuck::cast_slice(&[self.instances]),
+        //wgpu::BufferUsage::COPY_SRC,
+        //);
+
+        //encoder.copy_buffer_to_buffer(
+        //&staging_buffer,
+        //0,
+        //&self.uniform_buffer,
+        //0,
+        //std::mem::size_of::<Uniforms>() as wgpu::BufferAddress,
+        //);
 
         let frame = self.swap_chain.get_next_texture().unwrap();
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

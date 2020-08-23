@@ -1,11 +1,11 @@
 pub struct Camera {
-    eye: cgmath::Point3<f32>,
-    target: cgmath::Point3<f32>,
-    up: cgmath::Vector3<f32>,
-    aspect: f32,
-    fovy: f32,
-    znear: f32,
-    zfar: f32,
+    pub eye: cgmath::Point3<f32>,
+    pub target: cgmath::Point3<f32>,
+    pub up: cgmath::Vector3<f32>,
+    pub aspect: f32,
+    pub fovy: f32,
+    pub znear: f32,
+    pub zfar: f32,
 }
 
 #[rustfmt::skip]
@@ -46,6 +46,8 @@ pub struct CameraController {
     is_backward_pressed: bool,
     is_left_pressed: bool,
     is_right_pressed: bool,
+    is_fov_up_pressed: bool,
+    is_fov_down_pressed: bool,
 
     look_left_amt: f32,
     look_up_amt: f32,
@@ -64,6 +66,8 @@ impl CameraController {
             is_backward_pressed: false,
             is_left_pressed: false,
             is_right_pressed: false,
+            is_fov_up_pressed: false,
+            is_fov_down_pressed: false,
 
             look_left_amt: 0.0,
             look_up_amt: 0.0,
@@ -116,6 +120,14 @@ impl CameraController {
                         }
                         VirtualKeyCode::D => {
                             self.is_right_pressed = is_pressed;
+                            true
+                        }
+                        VirtualKeyCode::Q => {
+                            self.is_fov_up_pressed = is_pressed;
+                            true
+                        }
+                        VirtualKeyCode::E => {
+                            self.is_fov_down_pressed = is_pressed;
                             true
                         }
                         //VirtualKeyCode::Up => {
@@ -219,6 +231,30 @@ impl CameraController {
         self.look_left_amt = 0.0;
         self.look_up_amt = 0.0;
 
+        if self.is_fov_up_pressed {
+            camera.fovy = min(camera.fovy + speed * 5.0, 179.0);
+        }
+        if self.is_fov_down_pressed {
+            camera.fovy = max(camera.fovy - speed * 5.0, 1.0);
+        }
+
         camera.target = camera.eye + lrrot * uprot * look_vector;
+    }
+}
+
+//why is this not part of std::cmp::min
+fn min<T: PartialOrd>(a: T, b: T) -> T {
+    if a < b {
+        a
+    }else{
+        b
+    }
+}
+
+fn max<T: PartialOrd>(a: T, b: T) -> T {
+    if a > b {
+        a
+    }else{
+        b
     }
 }
