@@ -100,7 +100,25 @@ name = "bdo3"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bevy_asset",
+ "bevy_audio",
+ "bevy_core",
+ "bevy_diagnostic",
  "bevy_fly_camera",
+ "bevy_gltf",
+ "bevy_input",
+ "bevy_pbr",
+ "bevy_render",
+ "bevy_scene",
+ "bevy_sprite",
+ "bevy_text",
+ "bevy_transform",
+ "bevy_type_registry",
+ "bevy_ui",
+ "bevy_wgpu",
+ "bevy_window",
+ "bevy_winit",
+ "lazy_static",
 ]
 
 [[package]]

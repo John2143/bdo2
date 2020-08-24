@@ -1,54 +1,162 @@
-use bevy::prelude::*;
-use bevy_fly_camera::{FlyCamera, FlyCameraPlugin};
+use bevy::prelude::{
+    IntoQuerySystem,
+    //IntoForEachSystem,
+    //IntoThreadLocalSystem,
+    Res, ResMut,
+    Query, Input,
+    Time,
+    KeyCode, shape,
+    App,
+    Commands,
+    AppBuilder,
+    Vec3,
+};
 
-/// This example illustrates how to create parent->child relationships between entities how parent transforms
-/// are propagated to their descendants
+use bevy_transform::prelude::Translation;
+use bevy_pbr::prelude::*;
+
+use bevy_render::prelude::{
+    Color,
+    Msaa,
+    Mesh,
+};
+
+use bevy_asset::Assets;
+
+mod camera;
+use camera::{FlyCamera, FlyCameraPlugin};
+
+fn default_plugins() -> AppBuilder{
+    let mut app = App::build();
+
+    app.add_resource(Msaa { samples: 4 });
+    app.add_plugin(bevy_type_registry::TypeRegistryPlugin::default());
+    app.add_plugin(bevy_core::CorePlugin::default());
+    app.add_plugin(bevy_transform::TransformPlugin::default());
+    app.add_plugin(bevy_diagnostic::DiagnosticsPlugin::default());
+    app.add_plugin(bevy_input::InputPlugin::default());
+    app.add_plugin(bevy_window::WindowPlugin::default());
+    app.add_plugin(bevy_asset::AssetPlugin::default());
+    app.add_plugin(bevy_scene::ScenePlugin::default());
+    app.add_plugin(bevy_render::RenderPlugin::default());
+    //app.add_plugin(bevy_sprite::SpritePlugin::default());
+    app.add_plugin(bevy_pbr::PbrPlugin::default());
+    //app.add_plugin(bevy_ui::UiPlugin::default());
+    //app.add_plugin(bevy_text::TextPlugin::default());
+
+    //app.add_plugin(bevy_audio::AudioPlugin::default());
+    //app.add_plugin(bevy_gltf::GltfPlugin::default());
+    app.add_plugin(bevy_winit::WinitPlugin::default());
+    app.add_plugin(bevy_wgpu::WgpuPlugin::default());
+
+    app
+}
+
 fn main() {
-    App::build()
-        .add_resource(Msaa { samples: 4 })
-        .add_default_plugins()
+    default_plugins()
         .add_plugin(FlyCameraPlugin)
         .add_startup_system(setup.system())
         .add_system(control_objects.system())
+        .add_system(global_keys.system())
         .run();
 }
 
-/// this component indicates what entities should rotate
-struct Controlable;
-
-/// rotates the parent, which will result in the child also rotating
-fn control_objects(time: Res<Time>, mut query: Query<(&Controlable, &mut Translation)>) {
-    for (_, mut translation) in &mut query.iter() {
-        *translation.0.x_mut() += 1.0 * time.delta_seconds;
+fn global_keys(
+    //events: Res<Events<>>,
+    input: Res<Input<KeyCode>>){
+    if input.pressed(KeyCode::Escape) {
     }
 }
 
-/// set up a simple scene with a "parent" cube and a "child" cube
+struct Control(bool);
+
+struct Phys {
+    velocity: Vec3,
+}
+
+impl Default for Phys {
+    fn default() -> Self {
+        Self {
+            velocity: Default::default(),
+        }
+    }
+}
+
+fn is_on_ground(v: &Vec3) -> bool {
+    v.y() <= 0.0
+}
+
+fn set_clamped<T: std::cmp::PartialOrd>(val: T, min: T, max: T) -> T{
+    if val < min {
+        min
+    }else if val > max {
+        max
+    }else{
+        val
+    }
+}
+
+fn control_objects(
+    time: Res<Time>,
+    input: Res<Input<KeyCode>>,
+    mut query: Query<(
+        &Control,
+        &mut Translation,
+        &mut Phys,
+    )>,
+    mut cameras: Query<(
+        &mut FlyCamera,
+    )>,
+) {
+
+    for camera in &mut cameras.iter() {
+        dbg!(camera.0.options.free);
+    }
+
+    for (control, mut translation, mut phys) in &mut query.iter() {
+        if !control.0 {
+            continue;
+        }
+
+        *phys.velocity.y_mut() -= 9.8 * time.delta_seconds;
+
+        if is_on_ground(&translation.0) {
+            *phys.velocity.y_mut() = 0.0;
+            *translation.y_mut() = 0.0;
+
+            if input.pressed(KeyCode::Space) {
+                *phys.velocity.y_mut() += 3.0;
+            }
+        }
+
+        translation.0 += phys.velocity * time.delta_seconds;
+
+        if input.pressed(KeyCode::A) {
+            let newvel = set_clamped(phys.velocity.x() + 25.0 * time.delta_seconds, 0.0, 20.0);
+            *phys.velocity.x_mut() = newvel;
+
+        }
+    }
+}
+
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let cube_handle = meshes.add(Mesh::from(shape::Cube { size: 1.0 }));
+    let cube_handle = meshes.add(Mesh::from(shape::Cube { size: 1.7 }));
     let cube_material_handle = materials.add(StandardMaterial {
         albedo: Color::rgb(0.5, 0.4, 0.3),
         ..Default::default()
     });
 
     commands
-        // plane
         .spawn(PbrComponents {
             mesh: meshes.add(Mesh::from(shape::Plane { size: 10000.0 })),
             material: materials.add(Color::rgb(0.1, 0.2, 0.1).into()),
+            translation: Translation::new(0.0, -10.0, 0.0),
             ..Default::default()
         })
-        .spawn(PbrComponents {
-            mesh: cube_handle,
-            material: cube_material_handle,
-            translation: Translation::new(0.0, 0.0, 1.0),
-            ..Default::default()
-        })
-        .with(Controlable)
         .spawn(LightComponents {
             translation: Translation::new(4.0, 5.0, -4.0),
             ..Default::default()
@@ -63,5 +171,16 @@ fn setup(
             //..Default::default()
         //});
         .spawn(FlyCamera::default())
+        ;
+
+    commands
+        .spawn(PbrComponents {
+            mesh: cube_handle,
+            material: cube_material_handle,
+            translation: Translation::new(0.0, 2.0, 0.0),
+            ..Default::default()
+        })
+        .with(Control(true))
+        .with(Phys::default())
         ;
 }
