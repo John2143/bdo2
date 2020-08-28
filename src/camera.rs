@@ -75,8 +75,7 @@ fn forward_vector(rotation: &Rotation) -> Vec3 {
 
 fn forward_walk_vector(rotation: &Rotation) -> Vec3 {
     let f = forward_vector(rotation);
-    let f_flattened = Vec3::new(f.x(), 0.0, f.z()).normalize();
-    f_flattened
+    Vec3::new(f.x(), 0.0, f.z()).normalize()
 }
 
 fn strafe_vector(rotation: &Rotation) -> Vec3 {
@@ -86,11 +85,7 @@ fn strafe_vector(rotation: &Rotation) -> Vec3 {
         .normalize()
 }
 
-fn movement_axis(
-    input: &Res<Input<KeyCode>>,
-    plus: KeyCode,
-    minus: KeyCode,
-) -> f32 {
+fn movement_axis(input: &Res<Input<KeyCode>>, plus: KeyCode, minus: KeyCode) -> f32 {
     let mut axis = 0.0;
     if input.pressed(plus) {
         axis += 1.0;
@@ -114,23 +109,15 @@ fn camera_movement_system(
             continue;
         }
 
-        let axis_h =
-            movement_axis(&keyboard_input, options.key_right, options.key_left);
-        let axis_v =
-            movement_axis(&keyboard_input, options.key_backward, options.key_forward);
+        let axis_h = movement_axis(&keyboard_input, options.key_right, options.key_left);
+        let axis_v = movement_axis(&keyboard_input, options.key_backward, options.key_forward);
 
-        let axis_float =
-            movement_axis(&keyboard_input, options.key_up, options.key_down);
-        let delta_f = forward_walk_vector(rotation)
-            * axis_v
-            * options.speed
-            * time.delta_seconds;
+        let axis_float = movement_axis(&keyboard_input, options.key_up, options.key_down);
+        let delta_f = forward_walk_vector(rotation) * axis_v * options.speed * time.delta_seconds;
 
-        let delta_strafe =
-            strafe_vector(rotation) * axis_h * options.speed * time.delta_seconds;
+        let delta_strafe = strafe_vector(rotation) * axis_h * options.speed * time.delta_seconds;
 
-        let delta_float =
-            Vec3::unit_y() * axis_float * options.speed * time.delta_seconds;
+        let delta_float = Vec3::unit_y() * axis_float * options.speed * time.delta_seconds;
 
         translation.0 += delta_f + delta_strafe + delta_float;
     }
@@ -179,8 +166,7 @@ pub struct FlyCameraPlugin;
 
 impl Plugin for FlyCameraPlugin {
     fn build(&self, app: &mut AppBuilder) {
-        app
-            .init_resource::<State>()
+        app.init_resource::<State>()
             .add_system(camera_movement_system.system())
             .add_system(mouse_motion_system.system());
     }

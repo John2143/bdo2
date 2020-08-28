@@ -1,32 +1,33 @@
 use bevy::prelude::{
+    shape,
+    App,
+    AppBuilder,
+    Commands,
+    Input,
     IntoQuerySystem,
+    KeyCode,
+    Query,
     //IntoForEachSystem,
     //IntoThreadLocalSystem,
-    Res, ResMut,
-    Query, Input,
+    Res,
+    ResMut,
     Time,
-    KeyCode, shape,
-    App,
-    Commands,
-    AppBuilder,
     Vec3,
 };
 
-use bevy_transform::prelude::Translation;
 use bevy_pbr::prelude::*;
+use bevy_transform::prelude::Translation;
 
-use bevy_render::prelude::{
-    Color,
-    Msaa,
-    Mesh,
-};
+use bevy_render::prelude::{Color, Mesh, Msaa};
 
 use bevy_asset::Assets;
+
+use bevy::prelude::*;
 
 mod camera;
 use camera::{FlyCamera, FlyCameraPlugin};
 
-fn default_plugins() -> AppBuilder{
+fn default_plugins() -> AppBuilder {
     let mut app = App::build();
 
     app.add_resource(Msaa { samples: 4 });
@@ -58,14 +59,15 @@ fn main() {
         .add_startup_system(setup.system())
         .add_system(control_objects.system())
         .add_system(global_keys.system())
+        .add_system(camera_look_rot.system())
         .run();
 }
 
 fn global_keys(
     //events: Res<Events<>>,
-    input: Res<Input<KeyCode>>){
-    if input.pressed(KeyCode::Escape) {
-    }
+    input: Res<Input<KeyCode>>,
+) {
+    if input.pressed(KeyCode::Escape) {}
 }
 
 struct Control(bool);
@@ -86,56 +88,89 @@ fn is_on_ground(v: &Vec3) -> bool {
     v.y() <= 0.0
 }
 
-fn set_clamped<T: std::cmp::PartialOrd>(val: T, min: T, max: T) -> T{
+fn set_clamped<T: std::cmp::PartialOrd>(val: T, min: T, max: T) -> T {
     if val < min {
         min
-    }else if val > max {
+    } else if val > max {
         max
-    }else{
+    } else {
         val
+    }
+}
+
+use lazy_static::lazy_static;
+use std::sync::Mutex;
+
+lazy_static! {
+    static ref CAMERA_ROT: Mutex<Rotation> = Mutex::new(Rotation::identity());
+}
+
+fn camera_look_rot(mut query: Query<(&camera::ModifiedFlyCameraOptions, &Rotation)>) {
+    let mut cam = CAMERA_ROT.lock().unwrap();
+    for (_options, rotation) in &mut query.iter() {
+        cam.clone_from(&rotation);
     }
 }
 
 fn control_objects(
     time: Res<Time>,
     input: Res<Input<KeyCode>>,
-    mut query: Query<(
-        &Control,
-        &mut Translation,
-        &mut Phys,
-    )>,
-    mut cameras: Query<(
-        &mut FlyCamera,
-    )>,
+    mut query: Query<(&Control, &mut Translation, &mut Phys)>,
 ) {
-
-    for camera in &mut cameras.iter() {
-        dbg!(camera.0.options.free);
-    }
-
     for (control, mut translation, mut phys) in &mut query.iter() {
         if !control.0 {
             continue;
         }
 
-        *phys.velocity.y_mut() -= 9.8 * time.delta_seconds;
+        let grounded = is_on_ground(&translation.0);
 
-        if is_on_ground(&translation.0) {
-            *phys.velocity.y_mut() = 0.0;
+        //gravity
+        *phys.velocity.y_mut() -= 20.0 * time.delta_seconds;
+
+        if grounded {
+            if phys.velocity.y() < 0.0 {
+                *phys.velocity.y_mut() = 0.0;
+            }
             *translation.y_mut() = 0.0;
 
             if input.pressed(KeyCode::Space) {
-                *phys.velocity.y_mut() += 3.0;
+                *phys.velocity.y_mut() += 8.0;
             }
         }
 
-        translation.0 += phys.velocity * time.delta_seconds;
-
-        if input.pressed(KeyCode::A) {
-            let newvel = set_clamped(phys.velocity.x() + 25.0 * time.delta_seconds, 0.0, 20.0);
+        let accel = if grounded { 120.0 } else {
+            if input.pressed(KeyCode::LShift) {
+                300.0
+            }else{
+                20.0
+            }
+        };
+        let mut is_moving = false;
+        if input.pressed(KeyCode::D) {
+            let newvel = set_clamped(
+                phys.velocity.x() + accel * time.delta_seconds,
+                -999990.0,
+                20.0,
+            );
             *phys.velocity.x_mut() = newvel;
-
+            is_moving = true;
         }
+        if input.pressed(KeyCode::A) {
+            let newvel = set_clamped(
+                phys.velocity.x() - accel * time.delta_seconds,
+                -20.0,
+                9999990.0,
+            );
+            *phys.velocity.x_mut() = newvel;
+            is_moving = true;
+        }
+
+        //drag
+        let horizontal_factor = if grounded && !is_moving { 10.0 } else { 0.05 };
+        *phys.velocity.x_mut() -= phys.velocity.x() * horizontal_factor * time.delta_seconds;
+        *phys.velocity.z_mut() -= phys.velocity.z() * horizontal_factor * time.delta_seconds;
+
+        translation.0 += phys.velocity * time.delta_seconds;
     }
 }
 
@@ -163,15 +198,14 @@ fn setup(
         })
         // camera
         //.spawn(Camera3dComponents {
-            //transform: Transform::new_sync_disabled(Mat4::face_toward(
-                //Vec3::new(5.0, 10.0, 10.0),
-                //Vec3::new(0.0, 0.0, 0.0),
-                //Vec3::new(0.0, 1.0, 0.0),
-            //)),
-            //..Default::default()
+        //transform: Transform::new_sync_disabled(Mat4::face_toward(
+        //Vec3::new(5.0, 10.0, 10.0),
+        //Vec3::new(0.0, 0.0, 0.0),
+        //Vec3::new(0.0, 1.0, 0.0),
+        //)),
+        //..Default::default()
         //});
-        .spawn(FlyCamera::default())
-        ;
+        .spawn(FlyCamera::default());
 
     commands
         .spawn(PbrComponents {
@@ -181,6 +215,5 @@ fn setup(
             ..Default::default()
         })
         .with(Control(true))
-        .with(Phys::default())
-        ;
+        .with(Phys::default());
 }
