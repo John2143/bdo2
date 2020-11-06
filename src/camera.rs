@@ -73,19 +73,19 @@ fn forward_vector(rotation: &Rotation) -> Vec3 {
     rotation.mul_vec3(Vec3::unit_z()).normalize()
 }
 
-fn forward_walk_vector(rotation: &Rotation) -> Vec3 {
+pub fn forward_walk_vector(rotation: &Rotation) -> Vec3 {
     let f = forward_vector(rotation);
     Vec3::new(f.x(), 0.0, f.z()).normalize()
 }
 
-fn strafe_vector(rotation: &Rotation) -> Vec3 {
+pub fn strafe_vector(rotation: &Rotation) -> Vec3 {
     // Rotate it 90 degrees to get the strafe direction
     Rotation::from_rotation_y(90.0f32.to_radians())
         .mul_vec3(forward_walk_vector(rotation))
         .normalize()
 }
 
-fn movement_axis(input: &Res<Input<KeyCode>>, plus: KeyCode, minus: KeyCode) -> f32 {
+pub fn movement_axis(input: &Res<Input<KeyCode>>, plus: KeyCode, minus: KeyCode) -> f32 {
     let mut axis = 0.0;
     if input.pressed(plus) {
         axis += 1.0;

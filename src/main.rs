@@ -59,7 +59,6 @@ fn main() {
         .add_startup_system(setup.system())
         .add_system(control_objects.system())
         .add_system(global_keys.system())
-        .add_system(camera_look_rot.system())
         .run();
 }
 
@@ -98,25 +97,19 @@ fn set_clamped<T: std::cmp::PartialOrd>(val: T, min: T, max: T) -> T {
     }
 }
 
-use lazy_static::lazy_static;
-use std::sync::Mutex;
-
-lazy_static! {
-    static ref CAMERA_ROT: Mutex<Rotation> = Mutex::new(Rotation::identity());
-}
-
-fn camera_look_rot(mut query: Query<(&camera::ModifiedFlyCameraOptions, &Rotation)>) {
-    let mut cam = CAMERA_ROT.lock().unwrap();
-    for (_options, rotation) in &mut query.iter() {
-        cam.clone_from(&rotation);
-    }
-}
-
 fn control_objects(
     time: Res<Time>,
     input: Res<Input<KeyCode>>,
+    mut camera_query: Query<(&camera::ModifiedFlyCameraOptions, &Rotation)>,
     mut query: Query<(&Control, &mut Translation, &mut Phys)>,
 ) {
+    let mut cam: Rotation = Rotation::identity();
+
+    for (_options, rotation) in &mut camera_query.iter() {
+        cam.clone_from(&rotation);
+        break;
+    }
+
     for (control, mut translation, mut phys) in &mut query.iter() {
         if !control.0 {
             continue;
@@ -138,37 +131,22 @@ fn control_objects(
             }
         }
 
-        let accel = if grounded { 120.0 } else {
-            if input.pressed(KeyCode::LShift) {
-                300.0
-            }else{
-                20.0
-            }
-        };
-        let mut is_moving = false;
-        if input.pressed(KeyCode::D) {
-            let newvel = set_clamped(
-                phys.velocity.x() + accel * time.delta_seconds,
-                -999990.0,
-                20.0,
-            );
-            *phys.velocity.x_mut() = newvel;
-            is_moving = true;
-        }
-        if input.pressed(KeyCode::A) {
-            let newvel = set_clamped(
-                phys.velocity.x() - accel * time.delta_seconds,
-                -20.0,
-                9999990.0,
-            );
-            *phys.velocity.x_mut() = newvel;
-            is_moving = true;
-        }
+        use camera::{forward_walk_vector, movement_axis, strafe_vector};
 
-        //drag
-        let horizontal_factor = if grounded && !is_moving { 10.0 } else { 0.05 };
-        *phys.velocity.x_mut() -= phys.velocity.x() * horizontal_factor * time.delta_seconds;
-        *phys.velocity.z_mut() -= phys.velocity.z() * horizontal_factor * time.delta_seconds;
+        let axis_h = movement_axis(&input, KeyCode::D, KeyCode::A);
+        let axis_v = movement_axis(&input, KeyCode::S, KeyCode::W);
+
+        let delta_f = forward_walk_vector(&cam) * axis_v * 120.0 * time.delta_seconds;
+        let delta_strafe = strafe_vector(&cam) * axis_h * 120.0 * time.delta_seconds;
+
+        phys.velocity += delta_f + delta_strafe;
+
+        let xz_move = Vec3::new(phys.velocity.x(), 0.0, phys.velocity.z());
+        if xz_move.length_squared() > 0.01 {
+            phys.velocity -= xz_move.normalize() * 0.5 * time.delta_seconds;
+            dbg!(phys.velocity);
+            dbg!(xz_move.normalize());
+        }
 
         translation.0 += phys.velocity * time.delta_seconds;
     }
@@ -179,7 +157,8 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let cube_handle = meshes.add(Mesh::from(shape::Cube { size: 1.7 }));
+    let cube_size = 2.0;
+    let cube_handle = meshes.add(Mesh::from(shape::Cube { size: cube_size }));
     let cube_material_handle = materials.add(StandardMaterial {
         albedo: Color::rgb(0.5, 0.4, 0.3),
         ..Default::default()
@@ -189,11 +168,15 @@ fn setup(
         .spawn(PbrComponents {
             mesh: meshes.add(Mesh::from(shape::Plane { size: 10000.0 })),
             material: materials.add(Color::rgb(0.1, 0.2, 0.1).into()),
-            translation: Translation::new(0.0, -10.0, 0.0),
+            translation: Translation::new(0.0, -cube_size, 0.0),
             ..Default::default()
         })
         .spawn(LightComponents {
             translation: Translation::new(4.0, 5.0, -4.0),
+            ..Default::default()
+        })
+        .spawn(LightComponents {
+            translation: Translation::new(4.0, 5.0, 4.0),
             ..Default::default()
         })
         // camera
@@ -205,7 +188,12 @@ fn setup(
         //)),
         //..Default::default()
         //});
-        .spawn(FlyCamera::default());
+        .spawn(FlyCamera {
+            translation: Translation::new(10.0, 5.0, 4.0),
+            rotation: Rotation::from_rotation_x(50.0),
+            ..Default::default()
+        });
+        //.spawn(FlyCamera::default());
 
     commands
         .spawn(PbrComponents {
