@@ -1,12 +1,17 @@
-use bevy::{input::mouse::MouseMotion, prelude::*};
+use bevy::{input::mouse::MouseMotion, math::Mat2, input::mouse::MouseWheel, prelude::*};
+
+mod lib;
+use lib::RotatableVector;
 
 fn main() {
     App::build()
-        //.add_resource(Msaa { samples: 4 })
-        .init_resource::<State>()
+        .add_resource(Msaa { samples: 4 })
+        .init_resource::<InputState>()
+        .init_resource::<Config>()
         .add_plugins(DefaultPlugins)
         .add_startup_system(setup.system())
         .add_system(update_player.system())
+        .add_system(mouse.system())
         .run();
 }
 
@@ -22,8 +27,32 @@ struct CameraOrientation {
 }
 
 #[derive(Default)]
-struct State {
+struct InputState {
     mouse_motion_event_reader: EventReader<MouseMotion>,
+    mouse_wheel_event_reader: EventReader<MouseWheel>,
+}
+
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct Config {
+    sens: f32,
+    zoom_sens: f32,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        let file = "./config.yaml";
+        let default_config = include_str!("./defaultConfig.yaml");
+        let config = std::fs::read_to_string(file).unwrap_or_else(move |_| {
+            let mut f = std::fs::File::create(file).expect("couldn't open new config for writing");
+            use std::io::Write;
+            f.write_all(default_config.as_bytes()).expect("Couldn't write new config ??");
+            default_config.into()
+        });
+
+        serde_yaml::from_str(&config).expect("Couldn't read config")
+    }
 }
 
 impl Default for CameraOrientation {
@@ -45,6 +74,7 @@ fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    assets_server: Res<AssetServer>,
 ) {
     let player_material = materials.add({
         let mut q = StandardMaterial::from(Color::rgb(1.0, 0.5, 0.0));
@@ -58,9 +88,13 @@ fn setup(
         .with(PlayerCamera)
         .current_entity();
 
+    let player_mesh = assets_server.load("cube.gltf#Mesh0/Primitive0");
+
+    //commands.spawn_scene(player_mesh);
+
     let player = commands
         .spawn(PbrComponents {
-            mesh: meshes.add(Mesh::from(shape::Cube { size: 1.9 })),
+            mesh: player_mesh,
             transform: Transform {
                 translation: Vec3::new(0.0, 1.9, 0.0),
                 ..Default::default()
@@ -75,7 +109,13 @@ fn setup(
         .current_entity();
 
     commands.push_children(player.unwrap(), &[e.unwrap()]);
-    commands.spawn(LightComponents::default());
+    commands.spawn(LightComponents {
+        transform: Transform {
+            translation: Vec3::new(0.0, 5.0, 0.0),
+            ..Default::default()
+        },
+        ..Default::default()
+    });
     commands.spawn(PbrComponents {
         mesh: meshes.add(Mesh::from(shape::Plane { size: 300.0 })),
         material: materials.add(Color::rgb(0.1, 0.5, 0.7).into()),
@@ -98,101 +138,93 @@ fn setup(
             ..Default::default()
         });
     }
+
+    //banana
+    commands.spawn(PbrComponents {
+        mesh: meshes.add(Mesh::from(shape::Cube { size: 0.2 })),
+        material: materials.add(Color::rgb(1.0, 0.92, 0.21).into()),
+        transform: Transform {
+            translation: Vec3::new(-5.0, 1.0, 0.0),
+            ..Default::default()
+        },
+        ..Default::default()
+    });
 }
 
 fn mouse(
-    time: Res<Time>,
-    mut state: ResMut<State>,
+    mut state: ResMut<InputState>,
+    config: ResMut<Config>,
     mouse_motion: Res<Events<MouseMotion>>,
+    mouse_wheel: Res<Events<MouseWheel>>,
     mut query: Query<&mut CameraOrientation>,
 ) {
-}
+    let mut camera = query.iter_mut().next().unwrap();
+    let mut look = if let Some(event) = state.mouse_motion_event_reader.iter(&mouse_motion).next() {
+        event.delta
+    } else {
+        Vec2::zero()
+    };
 
-trait RemappableFloat {}
-impl RemappableFloat for f64 {}
-impl RemappableFloat for f32 {}
+    let wheel = if let Some(event) = state.mouse_wheel_event_reader.iter(&mouse_wheel).next() {
+        event.y
+    }else{
+        0.0
+    };
 
-fn remap<T>(src: T, (src_min, src_max): (T, T), (dest_min, dest_max): (T, T)) -> T
-where
-    T: RemappableFloat
-        + Copy
-        + std::ops::Sub<Output = T>
-        + std::cmp::PartialOrd
-        + std::ops::Mul<Output = T>
-        + std::ops::Div<Output = T>
-        + std::ops::Add<Output = T>,
-{
-    if src < src_min {
-        return dest_min;
-    } else if src > src_max {
-        return dest_max;
-    }
+    let look_sens = config.sens.to_radians();
+    look *= look_sens;
 
-    let off = src - src_min;
-    let off_pct = off / (src_max - src_min);
+    camera.yaw += look.x();
+    camera.pitch -= look.y();
+    camera.distance -= wheel * config.zoom_sens;
 
-    let dest_range = dest_max - dest_min;
-
-    dest_min + dest_range * off_pct
+    camera.pitch = camera.pitch.max(0f32.to_radians() + f32::EPSILON).min(90f32.to_radians());
+    camera.distance = camera.distance.max(5.).min(100.);
 }
 
 fn update_player(
     time: Res<Time>,
     keyboard_input: Res<Input<KeyCode>>,
-    mut player_query: Query<(&mut CameraOrientation, &mut Transform)>,
-    mut camera_query: Query<(&mut PlayerCamera, Entity, &mut Transform)>,
+    mut player_query: Query<(&CameraOrientation, &mut Transform)>,
+    mut camera_query: Query<(&PlayerCamera, Entity, &mut Transform)>,
 ) {
-    let mut movement = Vec2::zero();
+    let mut movement2d = Vec2::zero();
     if keyboard_input.pressed(KeyCode::E) {
-        *movement.y_mut() += 1.;
+        *movement2d.y_mut() += 1.;
     }
     if keyboard_input.pressed(KeyCode::D) {
-        *movement.y_mut() -= 1.;
+        *movement2d.y_mut() -= 1.;
     }
     if keyboard_input.pressed(KeyCode::F) {
-        *movement.x_mut() += 1.;
+        *movement2d.x_mut() += 1.;
     }
     if keyboard_input.pressed(KeyCode::S) {
-        *movement.x_mut() -= 1.;
+        *movement2d.x_mut() -= 1.;
     }
 
-    if movement != Vec2::zero() {
-        movement.normalize();
+    if movement2d != Vec2::zero() {
+        movement2d.normalize();
     }
 
     let move_speed = 10.0;
-    movement *= time.delta_seconds * move_speed;
+    movement2d *= time.delta_seconds * move_speed;
 
-    for (mut player, mut transform) in player_query.iter_mut() {
-        player.pitch = player.pitch.max(1f32.to_radians()).min(179f32.to_radians());
-        player.distance = player.distance.max(5.).min(30.);
+    for (player_cam, mut player_transform) in player_query.iter_mut() {
 
-        //transform.translation += Vec3::new(0.0, 1.0, 0.0) * time.delta_seconds;
+        //player.yaw = remap(
+            //(time.seconds_since_startup * 0.3).cos(),
+            //(-1.0, 1.0),
+            //(-180.0f64.to_radians(), 180.0f64.to_radians()),
+        //) as f32;
 
-        player.pitch = remap(
-            (time.seconds_since_startup * 0.2).sin(),
-            (-1.0, 1.0),
-            (25.0f64.to_radians(), 90.0f64.to_radians()),
-        ) as f32;
+        let movement = movement2d.rotate(player_cam.yaw - 90.0f32.to_radians());
+        player_transform.translation += Vec3::new(movement.x(), 0.0, movement.y());
+        player_transform.rotation = Quat::from_rotation_y(-player_cam.yaw);
 
-        player.yaw = remap(
-            (time.seconds_since_startup * 0.3).cos(),
-            (-1.0, 1.0),
-            (-180.0f64.to_radians(), 180.0f64.to_radians()),
-        ) as f32;
-
-        if player.pitch > 179f32.to_radians() {
-            player.pitch -= 179f32.to_radians()
-        }
-
-        //println!("{} {}", player.yaw, player.pitch);
-
-        transform.translation += Vec3::new(0.0, 0.0, 0.0);
-        transform.rotation = Quat::from_rotation_y(-player.yaw);
-
-        if let Some(camera_entity) = player.attached_entity {
-            let cam_pos = Vec3::new(0., player.pitch.cos(), -player.pitch.sin()).normalize()
-                * player.distance;
+        if let Some(camera_entity) = player_cam.attached_entity {
+            let (pitch_sin, pitch_cos) = player_cam.pitch.sin_cos();
+            let cam_pos = Vec3::new(0., pitch_cos, pitch_sin).normalize()
+                * player_cam.distance;
             for (_, e, mut camera3dtrans) in camera_query.iter_mut() {
                 if camera_entity != e {
                     continue;
