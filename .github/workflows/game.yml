@@ -2,9 +2,9 @@ name: Game
 
 on:
   push:
-    branches: [ cicd_fix ]
+    branches: [ master ]
   pull_request:
-    branches: [ cicd_fix]
+    branches: [ master ]
 
 jobs:
   build:
