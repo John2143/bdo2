@@ -2,9 +2,9 @@ name: Game
 
 on:
   push:
-    branches: [ master ]
+    branches: [ cicd_fix ]
   pull_request:
-    branches: [ master ]
+    branches: [ cicd_fix]
 
 jobs:
   build:
@@ -14,7 +14,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Use nightly rustup
-      run: rustup toolchain install nightly && rustup default nightly
+      run: rustup toolchain install nightly
     - name: Add toolchain
       run: rustup target add x86_64-pc-windows-msvc
     - name: Run tests
