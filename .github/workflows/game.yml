@@ -34,9 +34,7 @@ jobs:
     - name: Create Build Directory and Add Files
       run: mkdir build && cp ./target/x86_64-pc-windows-msvc/release/bdo3.exe build/game.exe && mv assets build
     - name: Create Zip of Release
-      uses: montudor/action-zip@v0.1.1
-      with:
-        args: 7z a build.zip build
+      run: 7z a build.zip build
     - name: Upload Release
       id: upload-release-asset
       uses: actions/upload-release-asset@v1
