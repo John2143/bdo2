@@ -25,11 +25,14 @@ fn main() {
 //based on Bevy-WoW camera
 struct CameraOrientation {
     yaw: f32,
+    ///0 = straight up vector (looking directly down at the ground)
+    ///180 = straight down vector (looking up towards bottom of player)
     pitch: f32,
 
     #[allow(dead_code)]
     roll: f32,
 
+    //meters from cam
     distance: f32,
 
     attached_entity: Option<Entity>,
@@ -72,7 +75,8 @@ fn setup(
     let e = commands
         .spawn(Camera3dComponents::default())
         .with(PlayerCamera)
-        .current_entity();
+        .current_entity()
+        .unwrap();
 
     let player_mesh = assets_server.load("cube.gltf#Mesh0/Primitive0");
 
@@ -89,21 +93,28 @@ fn setup(
             ..Default::default()
         })
         .with(CameraOrientation {
-            attached_entity: e,
+            attached_entity: Some(e),
             ..Default::default()
         })
         .current_entity();
 
-    commands.push_children(player.unwrap(), &[e.unwrap()]);
+    //let the camera transform/rotate with the player.
+    commands.push_children(player.unwrap(), &[e]);
+
     commands.spawn(LightComponents {
         transform: Transform {
             translation: Vec3::new(0.0, 5.0, 0.0),
             ..Default::default()
         },
+        //light: Light {
+            //color: Color::rgb(1.0, 0.5, 0.5),
+            //..Default::default()
+        //},
         ..Default::default()
     });
+
     commands.spawn(PbrComponents {
-        mesh: meshes.add(Mesh::from(shape::Plane { size: 300.0 })),
+        mesh: meshes.add(Mesh::from(shape::Plane { size: 1000.0 })),
         material: materials.add(Color::rgb(0.1, 0.5, 0.7).into()),
         ..Default::default()
     });
@@ -167,7 +178,7 @@ fn mouse(
     camera.pitch = camera
         .pitch
         .max(0f32.to_radians() + f32::EPSILON)
-        .min(90f32.to_radians());
+        .min(180f32.to_radians() - f32::EPSILON);
     camera.distance = camera.distance.max(5.).min(100.);
 }
 
