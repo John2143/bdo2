@@ -16,11 +16,11 @@ jobs:
     - name: Use nightly rustup
       run: rustup toolchain install nightly
     - name: Add toolchain
-      run: rustup target add x86_64-pc-windows-msvc
+      run: rustup target add x86_64-pc-windows-msvc --toolchain nightly
     - name: Run tests
-      run: cargo test --target=x86_64-pc-windows-msvc --verbose
+      run: cargo +nightly test --target=x86_64-pc-windows-msvc --verbose
     - name: Build Release
-      run: cargo build --target=x86_64-pc-windows-msvc --verbose --release
+      run: cargo +nightly build --target=x86_64-pc-windows-msvc --verbose --release
     - name: Release
       id: create_release
       uses: actions/create-release@v1
