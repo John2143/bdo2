@@ -14,4 +14,4 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Use nightly rustup
-      run: zip -qq -r assets.zip
+      run: 7z a assets.zip assets\
