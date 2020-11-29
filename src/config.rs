@@ -17,7 +17,7 @@ pub struct Config {
     pub jump: KeyCode,
 }
 
-const DEFAULT_CONFIG: &str = include_str!("./defaultConfig.yaml");
+const DEFAULT_CONFIG: &str = include_str!("../assets/default_config.yaml");
 
 impl Config {
     pub fn load_or_create<P: AsRef<Path>>(file: &P) -> Self {
