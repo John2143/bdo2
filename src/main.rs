@@ -15,14 +15,17 @@ fn main() {
         .init_resource::<MouseInputState>()
         .init_resource::<Config>()
         .add_plugins(DefaultPlugins)
-        .add_startup_system(read_config.system())
-        .add_startup_system(setup.system())
-        .add_system(update_player.system())
-        .add_system(mouse.system())
+        .add_startup_system(setup_read_config.system())
+        .add_startup_system(setup_scene.system())
+        .add_startup_system(setup_window.system())
+        .add_system(system_update_player.system())
+        .add_system(system_window.system())
+        .add_system(system_mouse.system())
         .run();
 }
 
-//based on Bevy-WoW camera
+///based on Bevy-WoW camera
+///angles are in radians
 struct CameraOrientation {
     yaw: f32,
     ///0 = straight up vector (looking directly down at the ground)
@@ -40,6 +43,8 @@ struct CameraOrientation {
 
 #[derive(Default)]
 struct MouseInputState {
+    //set to true if events should be chomped
+    no_mouse_inputs: bool,
     mouse_motion_event_reader: EventReader<MouseMotion>,
     mouse_wheel_event_reader: EventReader<MouseWheel>,
 }
@@ -48,9 +53,9 @@ impl Default for CameraOrientation {
     fn default() -> Self {
         Self {
             yaw: 0.,
-            pitch: 0.,
+            pitch: 60f32.to_radians(),
             roll: 0.,
-            distance: 100.,
+            distance: 50.,
             attached_entity: None,
         }
     }
@@ -59,7 +64,7 @@ impl Default for CameraOrientation {
 struct PlayerCamera;
 
 /// set up a simple 3D scene
-fn setup(
+fn setup_scene(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -144,11 +149,33 @@ fn setup(
     });
 }
 
-fn read_config(mut config: ResMut<Config>) {
+fn setup_read_config(mut config: ResMut<Config>) {
     *config = Config::load_or_create_default();
 }
 
-fn mouse(
+fn setup_window(
+    mut windows: ResMut<Windows>,
+){
+    let window = windows.get_primary_mut().unwrap();
+    window.set_cursor_lock_mode(true);
+    window.set_cursor_visibility(false);
+    window.set_title("9.99$ game btw".into());
+}
+
+fn system_window(
+    mut windows: ResMut<Windows>,
+    keyboard_input: Res<Input<KeyCode>>,
+    mut state: ResMut<MouseInputState>,
+){
+    if keyboard_input.just_pressed(KeyCode::Escape) {
+        let window = windows.get_primary_mut().unwrap();
+        window.set_cursor_lock_mode(!window.cursor_locked());
+        window.set_cursor_visibility(!window.cursor_visible());
+        state.no_mouse_inputs = !state.no_mouse_inputs;
+    }
+}
+
+fn system_mouse(
     mut state: ResMut<MouseInputState>,
     config: Res<Config>,
     mouse_motion: Res<Events<MouseMotion>>,
@@ -168,6 +195,8 @@ fn mouse(
         0.0
     };
 
+    if state.no_mouse_inputs {return}
+
     let look_sens = config.sens.to_radians();
     look *= look_sens;
 
@@ -182,7 +211,7 @@ fn mouse(
     camera.distance = camera.distance.max(5.).min(100.);
 }
 
-fn update_player(
+fn system_update_player(
     time: Res<Time>,
     keyboard_input: Res<Input<KeyCode>>,
     config: Res<Config>,
