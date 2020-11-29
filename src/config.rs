@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 
-use std::path::Path;
-use crate::config_read::{keybind_list, keybind};
+use crate::config_read::{keybind, keybind_list};
 use serde::Deserialize;
+use std::path::Path;
 
 ///The user keybinds and other personal settings
 #[derive(Deserialize)]
@@ -24,7 +24,8 @@ impl Config {
         let config = std::fs::read_to_string(file).unwrap_or_else(move |_| {
             let mut f = std::fs::File::create(file).expect("couldn't open new config for writing");
             use std::io::Write;
-            f.write_all(DEFAULT_CONFIG.as_bytes()).expect("Couldn't write new config ??");
+            f.write_all(DEFAULT_CONFIG.as_bytes())
+                .expect("Couldn't write new config ??");
             DEFAULT_CONFIG.into()
         });
 

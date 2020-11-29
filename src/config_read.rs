@@ -25,9 +25,8 @@
 use std::borrow::Cow;
 
 use bevy::prelude::*;
+use serde::{de, Deserializer};
 use std::collections::HashMap;
-use serde::{Deserializer, de};
-
 
 ///A list of `N` keybinds. takes each element in the list as a string, parses to
 ///`KeyCode`
@@ -37,7 +36,9 @@ use serde::{Deserializer, de};
 ///    pub movement: [KeyCode; 4],
 ///}
 ///```
-pub fn keybind_list<'de, D: Deserializer<'de>, const N: usize>(de: D) -> Result<[KeyCode; N], D::Error> {
+pub fn keybind_list<'de, D: Deserializer<'de>, const N: usize>(
+    de: D,
+) -> Result<[KeyCode; N], D::Error> {
     de.deserialize_any(KeybindVisitor)
 }
 
@@ -63,18 +64,20 @@ impl<'de, const N: usize> de::Visitor<'de> for KeybindVisitor<N> {
         write!(formatter, "sequence of {} keybinds", N)
     }
 
-    fn visit_str<E: de::Error>(self, s: &str) -> Result<Self::Value, E>
-    {
+    fn visit_str<E: de::Error>(self, s: &str) -> Result<Self::Value, E> {
         //Treat strings as arrays with 1 length and fail if the target length is not 1
         match N {
             1 => Ok([str_to_keybind(&s)?; N]),
-            _ => Err(E::custom(format!("This field should be a list of {} binds, not a single bind", N))),
+            _ => Err(E::custom(format!(
+                "This field should be a list of {} binds, not a single bind",
+                N
+            ))),
         }
     }
 
     fn visit_seq<A>(self, mut v: A) -> Result<Self::Value, A::Error>
     where
-        A: de::SeqAccess<'de>
+        A: de::SeqAccess<'de>,
     {
         let mut keycodes = [KeyCode::E; N];
         for i in 0..N {
@@ -157,7 +160,10 @@ zoom_sens: 2.2
 movement: ["W", "A", "S", "D", "F"]
         "#;
         let err = serde_yaml::from_str::<ConfigTest>(&default_config).unwrap_err();
-        assert_eq!(&err.to_string(), "movement: invalid length 5, expected sequence of 4 elements at line 2 column 11");
+        assert_eq!(
+            &err.to_string(),
+            "movement: invalid length 5, expected sequence of 4 elements at line 2 column 11"
+        );
     }
 
     #[test]
@@ -166,7 +172,10 @@ movement: ["W", "A", "S", "D", "F"]
 movement: ["W", "A"]
         "#;
         let err = serde_yaml::from_str::<ConfigTest>(&default_config).unwrap_err();
-        assert_eq!(&err.to_string(), "movement: invalid length 2, expected sequence of 4 keybinds at line 2 column 11");
+        assert_eq!(
+            &err.to_string(),
+            "movement: invalid length 2, expected sequence of 4 keybinds at line 2 column 11"
+        );
     }
 
     #[test]
@@ -175,7 +184,10 @@ movement: ["W", "A"]
 jump: ["W", "A"]
         "#;
         let err = serde_yaml::from_str::<ConfigTest>(&default_config).unwrap_err();
-        assert_eq!(&err.to_string(), "jump: invalid length 2, expected sequence of 1 element at line 2 column 7");
+        assert_eq!(
+            &err.to_string(),
+            "jump: invalid length 2, expected sequence of 1 element at line 2 column 7"
+        );
     }
 
     #[test]
@@ -184,7 +196,10 @@ jump: ["W", "A"]
 jump: "NOTKEY"
         "#;
         let err = serde_yaml::from_str::<ConfigTest>(&default_config).unwrap_err();
-        assert_eq!(&err.to_string(), "jump: NOTKEY is not the name of a valid key at line 2 column 7");
+        assert_eq!(
+            &err.to_string(),
+            "jump: NOTKEY is not the name of a valid key at line 2 column 7"
+        );
     }
 
     #[test]

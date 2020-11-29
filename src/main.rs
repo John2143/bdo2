@@ -2,9 +2,9 @@
 
 use bevy::{input::mouse::MouseMotion, input::mouse::MouseWheel, prelude::*};
 
-mod utils;
 mod config;
 mod config_read;
+mod utils;
 
 use config::Config;
 use utils::RotatableVector;
@@ -108,12 +108,8 @@ fn setup(
         ..Default::default()
     });
 
-    let cubes = [
-        (5.0, 1.0, 5.0),
-        (25.0, 1.0, 45.0),
-        (-20.0, 1.0, 0.0),
-    ];
-    for cube in &cubes{
+    let cubes = [(5.0, 1.0, 5.0), (25.0, 1.0, 45.0), (-20.0, 1.0, 0.0)];
+    for cube in &cubes {
         commands.spawn(PbrComponents {
             mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
             material: materials.add(Color::rgb(0.5, 0.5, 0.5).into()),
@@ -137,9 +133,7 @@ fn setup(
     });
 }
 
-fn read_config(
-    mut config: ResMut<Config>,
-) {
+fn read_config(mut config: ResMut<Config>) {
     *config = Config::load_or_create_default();
 }
 
@@ -159,7 +153,7 @@ fn mouse(
 
     let wheel = if let Some(event) = state.mouse_wheel_event_reader.iter(&mouse_wheel).next() {
         event.y
-    }else{
+    } else {
         0.0
     };
 
@@ -170,7 +164,10 @@ fn mouse(
     camera.pitch -= look.y();
     camera.distance -= wheel * config.zoom_sens;
 
-    camera.pitch = camera.pitch.max(0f32.to_radians() + f32::EPSILON).min(90f32.to_radians());
+    camera.pitch = camera
+        .pitch
+        .max(0f32.to_radians() + f32::EPSILON)
+        .min(90f32.to_radians());
     camera.distance = camera.distance.max(5.).min(100.);
 }
 
@@ -204,11 +201,10 @@ fn update_player(
     movement2d *= time.delta_seconds * move_speed;
 
     for (player_cam, mut player_transform) in player_query.iter_mut() {
-
         //player.yaw = remap(
-            //(time.seconds_since_startup * 0.3).cos(),
-            //(-1.0, 1.0),
-            //(-180.0f64.to_radians(), 180.0f64.to_radians()),
+        //(time.seconds_since_startup * 0.3).cos(),
+        //(-1.0, 1.0),
+        //(-180.0f64.to_radians(), 180.0f64.to_radians()),
         //) as f32;
 
         let movement = movement2d.rotate(player_cam.yaw - 90.0f32.to_radians());
@@ -217,8 +213,7 @@ fn update_player(
 
         if let Some(camera_entity) = player_cam.attached_entity {
             let (pitch_sin, pitch_cos) = player_cam.pitch.sin_cos();
-            let cam_pos = Vec3::new(0., pitch_cos, pitch_sin).normalize()
-                * player_cam.distance;
+            let cam_pos = Vec3::new(0., pitch_cos, pitch_sin).normalize() * player_cam.distance;
             for (_, e, mut camera3dtrans) in camera_query.iter_mut() {
                 if camera_entity != e {
                     continue;
