@@ -61,6 +61,7 @@ impl Default for CameraOrientation {
     }
 }
 
+//marker trait attached to the spawned camera indicating that our ent probably needs to control it
 struct PlayerCamera;
 
 /// set up a simple 3D scene
@@ -118,9 +119,11 @@ fn setup_scene(
         ..Default::default()
     });
 
+    let floor_handle = assets_server.load("floor.png");
+
     commands.spawn(PbrComponents {
         mesh: meshes.add(Mesh::from(shape::Plane { size: 1000.0 })),
-        material: materials.add(Color::rgb(0.1, 0.5, 0.7).into()),
+        material: materials.add(floor_handle.into()),
         ..Default::default()
     });
 
