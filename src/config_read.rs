@@ -205,13 +205,15 @@ jump: "NOTKEY"
     #[test]
     fn quotes_optional() {
         let default_config = r#"---
-movement: ["W", "A", "S", "D"]
+movement: [W, A, S, D]
 jump: Space
-crouch: ["J"]
+crouch: [J]
 zoom_sens: 2.2
         "#;
         let config: ConfigTest = serde_yaml::from_str(&default_config).unwrap();
         use KeyCode::*;
+        assert_eq!(&config.movement, &[W, A, S, D]);
         assert_eq!(&config.jump, &Space);
+        assert_eq!(&config.crouch, &J);
     }
 }
