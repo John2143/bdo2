@@ -53,3 +53,23 @@ impl RotatableVector<Quat> for Vec3 {
         todo!()
     }
 }
+
+pub trait Vec3toVec2 {
+    fn xz2(self) -> Vec2;
+}
+
+impl Vec3toVec2 for Vec3 {
+    fn xz2(self) -> Vec2 {
+        Vec2::new(self.x(), self.z())
+    }
+}
+
+pub trait Vec2toVec3 {
+    fn xz3(self) -> Vec3;
+}
+
+impl Vec2toVec3 for Vec2 {
+    fn xz3(self) -> Vec3 {
+        Vec3::new(self.x(), 0.0, self.y())
+    }
+}

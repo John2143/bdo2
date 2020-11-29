@@ -18,7 +18,8 @@ fn main() {
         .add_startup_system(setup_read_config.system())
         .add_startup_system(setup_scene.system())
         .add_startup_system(setup_window.system())
-        .add_system(system_update_player.system())
+        .add_system(system_update_player_cam.system())
+        .add_system(system_update_movement.system())
         .add_system(system_window.system())
         .add_system(system_mouse.system())
         .run();
@@ -61,6 +62,18 @@ impl Default for CameraOrientation {
     }
 }
 
+struct AdvancedMovement {
+    dash_cooldown: f32,
+    movement_speed_ground: f32,
+    movement_speed_air: f32,
+}
+
+struct Physics {
+    gravity_func: fn(f32, f32) -> f32,
+    velocity: Vec3,
+    last_jump: f32,
+}
+
 //marker trait attached to the spawned camera indicating that our ent probably needs to control it
 struct PlayerCamera;
 
@@ -101,6 +114,21 @@ fn setup_scene(
         .with(CameraOrientation {
             attached_entity: Some(e),
             ..Default::default()
+        })
+        .with(AdvancedMovement {
+            dash_cooldown: -1.0,
+            movement_speed_ground: 15.0,
+            movement_speed_air: 2.0,
+        })
+        .with(Physics {
+            gravity_func: |x, launchvel| {
+                let offset = 5.0;
+                35f32.min((x - 0.5).powf(6.0) + offset)
+
+                //35f32.min(15. * x)
+            },
+            velocity: Vec3::zero(),
+            last_jump: -100.0,
         })
         .current_entity();
 
@@ -214,13 +242,12 @@ fn system_mouse(
     camera.distance = camera.distance.max(5.).min(100.);
 }
 
-fn system_update_player(
+fn system_update_movement(
     time: Res<Time>,
     keyboard_input: Res<Input<KeyCode>>,
     config: Res<Config>,
-    mut player_query: Query<(&CameraOrientation, &mut Transform)>,
-    mut camera_query: Query<(&PlayerCamera, Entity, &mut Transform)>,
-) {
+    mut player_query: Query<(&CameraOrientation, &mut Transform, &mut Physics, &mut AdvancedMovement)>,
+){
     let mut movement2d = Vec2::zero();
     let [m_up, m_left, m_down, m_right] = config.movement;
     if keyboard_input.pressed(m_up) {
@@ -240,9 +267,42 @@ fn system_update_player(
         movement2d.normalize();
     }
 
-    let move_speed = 10.0;
-    movement2d *= time.delta_seconds * move_speed;
+    use utils::{Vec3toVec2, Vec2toVec3};
 
+    for (player_cam, mut player_transform, mut phys, mut movement) in player_query.iter_mut() {
+        let is_in_air = if player_transform.translation.y() <= 0.0 { false } else { true };
+        movement2d *= if is_in_air { movement.movement_speed_air } else {movement.movement_speed_ground};
+
+        let delta_y_vel = (phys.gravity_func)(time.seconds_since_startup as f32 - phys.last_jump, 5.0);
+        dbg!(delta_y_vel);
+        let delta_y_vel = delta_y_vel * time.delta_seconds;
+        phys.velocity -= Vec3::new(0.0, delta_y_vel, 0.0);
+
+        phys.velocity.set_x(0.0);
+        phys.velocity.set_z(0.0);
+
+        let movement2d = movement2d.rotate(player_cam.yaw - 90.0f32.to_radians());
+        //phys.velocity += movement2d.xz3();
+
+        player_transform.translation += (phys.velocity) * time.delta_seconds;
+
+        if !is_in_air {
+            player_transform.translation.set_y(0.0);
+            phys.velocity.set_y(0.0);
+
+            if keyboard_input.pressed(config.jump) {
+                phys.velocity.set_y(15.0);
+                player_transform.translation.set_y(0.0 + f32::EPSILON);
+                phys.last_jump = time.seconds_since_startup as f32;
+            }
+        }
+    }
+}
+
+fn system_update_player_cam(
+    mut player_query: Query<(&CameraOrientation, &mut Transform)>,
+    mut camera_query: Query<(&PlayerCamera, Entity, &mut Transform)>,
+) {
     for (player_cam, mut player_transform) in player_query.iter_mut() {
         //player.yaw = remap(
         //(time.seconds_since_startup * 0.3).cos(),
@@ -250,8 +310,6 @@ fn system_update_player(
         //(-180.0f64.to_radians(), 180.0f64.to_radians()),
         //) as f32;
 
-        let movement = movement2d.rotate(player_cam.yaw - 90.0f32.to_radians());
-        player_transform.translation += Vec3::new(movement.x(), 0.0, movement.y());
         player_transform.rotation = Quat::from_rotation_y(-player_cam.yaw);
 
         if let Some(camera_entity) = player_cam.attached_entity {
