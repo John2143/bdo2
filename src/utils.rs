@@ -66,10 +66,15 @@ impl Vec3toVec2 for Vec3 {
 
 pub trait Vec2toVec3 {
     fn xz3(self) -> Vec3;
+    fn xz3_withy(self, y: f32) -> Vec3;
 }
 
 impl Vec2toVec3 for Vec2 {
     fn xz3(self) -> Vec3 {
-        Vec3::new(self.x(), 0.0, self.y())
+        self.xz3_withy(0.0)
+    }
+
+    fn xz3_withy(self, y: f32) -> Vec3 {
+        Vec3::new(self.x(), y, self.y())
     }
 }

@@ -14,14 +14,17 @@ fn main() {
         .add_resource(Msaa { samples: 4 })
         .init_resource::<MouseInputState>()
         .init_resource::<Config>()
+        .init_resource::<UIDebugInfo>()
         .add_plugins(DefaultPlugins)
         .add_startup_system(setup_read_config.system())
         .add_startup_system(setup_scene.system())
         .add_startup_system(setup_window.system())
+        .add_startup_system(setup_debug_info.system())
         .add_system(system_update_player_cam.system())
         .add_system(system_update_movement.system())
         .add_system(system_window.system())
         .add_system(system_mouse.system())
+        .add_system(system_update_debug_info.system())
         .run();
 }
 
@@ -62,16 +65,43 @@ impl Default for CameraOrientation {
     }
 }
 
+struct UIDebugMarker;
+
+#[derive(Default)]
+struct UIDebugInfo {
+}
+
+impl std::fmt::Display for UIDebugInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "yep")?;
+
+        Ok(())
+    }
+}
+
 struct AdvancedMovement {
     dash_cooldown: f32,
     movement_speed_ground: f32,
     movement_speed_air: f32,
+    movement_acceleration: f32,
 }
 
 struct Physics {
     gravity_func: fn(f32, f32) -> f32,
     velocity: Vec3,
+    walking_velocity: Vec2,
     last_jump: f32,
+}
+
+impl Default for Physics {
+    fn default() -> Self {
+        Self {
+            gravity_func: |_, _| 9.8,
+            velocity: Vec3::zero(),
+            walking_velocity: Vec2::zero(),
+            last_jump: -10.,
+        }
+    }
 }
 
 //marker trait attached to the spawned camera indicating that our ent probably needs to control it
@@ -119,16 +149,19 @@ fn setup_scene(
             dash_cooldown: -1.0,
             movement_speed_ground: 15.0,
             movement_speed_air: 2.0,
+            movement_acceleration: 15.0 * 10.0,
         })
         .with(Physics {
             gravity_func: |x, launchvel| {
-                let offset = 5.0;
-                35f32.min((x - 0.5).powf(6.0) + offset)
+                //let offset = 25.0;
+                //35f32.min((x - 0.5).powf(2.0) + offset)
+
+                30.0
 
                 //35f32.min(15. * x)
             },
-            velocity: Vec3::zero(),
             last_jump: -100.0,
+            ..Default::default()
         })
         .current_entity();
 
@@ -150,7 +183,7 @@ fn setup_scene(
     let floor_handle = assets_server.load("floor.png");
 
     commands.spawn(PbrComponents {
-        mesh: meshes.add(Mesh::from(shape::Plane { size: 1000.0 })),
+        mesh: meshes.add(Mesh::from(shape::Plane { size: 2000.0 })),
         material: materials.add(floor_handle.into()),
         ..Default::default()
     });
@@ -245,6 +278,7 @@ fn system_mouse(
 fn system_update_movement(
     time: Res<Time>,
     keyboard_input: Res<Input<KeyCode>>,
+    mut ui_debug: ResMut<UIDebugInfo>,
     config: Res<Config>,
     mut player_query: Query<(&CameraOrientation, &mut Transform, &mut Physics, &mut AdvancedMovement)>,
 ){
@@ -267,24 +301,31 @@ fn system_update_movement(
         movement2d.normalize();
     }
 
-    use utils::{Vec3toVec2, Vec2toVec3};
+    use utils::Vec2toVec3;
 
     for (player_cam, mut player_transform, mut phys, mut movement) in player_query.iter_mut() {
         let is_in_air = if player_transform.translation.y() <= 0.0 { false } else { true };
         movement2d *= if is_in_air { movement.movement_speed_air } else {movement.movement_speed_ground};
+        movement2d *= movement.movement_acceleration / movement.movement_speed_ground;
 
         let delta_y_vel = (phys.gravity_func)(time.seconds_since_startup as f32 - phys.last_jump, 5.0);
-        dbg!(delta_y_vel);
         let delta_y_vel = delta_y_vel * time.delta_seconds;
+
         phys.velocity -= Vec3::new(0.0, delta_y_vel, 0.0);
 
-        phys.velocity.set_x(0.0);
-        phys.velocity.set_z(0.0);
-
         let movement2d = movement2d.rotate(player_cam.yaw - 90.0f32.to_radians());
-        //phys.velocity += movement2d.xz3();
+        if !is_in_air {
+            phys.walking_velocity /= 1.05 / (1.0 - time.delta_seconds);
+        }
+        phys.walking_velocity += movement2d * time.delta_seconds;
 
-        player_transform.translation += (phys.velocity) * time.delta_seconds;
+        if phys.walking_velocity.length() > movement.movement_speed_ground {
+            phys.walking_velocity = phys.walking_velocity.normalize() * movement.movement_speed_ground;
+        }
+
+        println!("{:.2}", &phys.walking_velocity.length());
+
+        player_transform.translation += (phys.velocity + phys.walking_velocity.xz3()) * time.delta_seconds;
 
         if !is_in_air {
             player_transform.translation.set_y(0.0);
@@ -297,6 +338,20 @@ fn system_update_movement(
             }
         }
     }
+}
+
+fn setup_debug_info(
+    mut commands: Commands,
+){
+    commands.spawn(UiCameraComponents {
+        ..Default::default()
+    }).with(UIDebugMarker);
+}
+
+fn system_update_debug_info(
+    info: Res<UIDebugInfo>,
+    mut Text: Query<(&mut Text, &UIDebugMarker)>,
+){
 }
 
 fn system_update_player_cam(

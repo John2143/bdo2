@@ -4,3 +4,4 @@ zoom_sens: 3.0
 
 movement: [W, A, S, D]
 jump: Space
+dash: LShift
