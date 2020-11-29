@@ -112,8 +112,8 @@ fn setup_scene(
             ..Default::default()
         },
         //light: Light {
-            //color: Color::rgb(1.0, 0.5, 0.5),
-            //..Default::default()
+        //color: Color::rgb(1.0, 0.5, 0.5),
+        //..Default::default()
         //},
         ..Default::default()
     });
@@ -153,9 +153,7 @@ fn setup_read_config(mut config: ResMut<Config>) {
     *config = Config::load_or_create_default();
 }
 
-fn setup_window(
-    mut windows: ResMut<Windows>,
-){
+fn setup_window(mut windows: ResMut<Windows>) {
     let window = windows.get_primary_mut().unwrap();
     window.set_cursor_lock_mode(true);
     window.set_cursor_visibility(false);
@@ -166,7 +164,7 @@ fn system_window(
     mut windows: ResMut<Windows>,
     keyboard_input: Res<Input<KeyCode>>,
     mut state: ResMut<MouseInputState>,
-){
+) {
     if keyboard_input.just_pressed(KeyCode::Escape) {
         let window = windows.get_primary_mut().unwrap();
         window.set_cursor_lock_mode(!window.cursor_locked());
@@ -195,7 +193,9 @@ fn system_mouse(
         0.0
     };
 
-    if state.no_mouse_inputs {return}
+    if state.no_mouse_inputs {
+        return;
+    }
 
     let look_sens = config.sens.to_radians();
     look *= look_sens;
