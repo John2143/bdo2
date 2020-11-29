@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 #[inline]
+#[allow(dead_code)]
 fn remap<T>(src: T, (src_min, src_max): (T, T), (dest_min, dest_max): (T, T)) -> T
 where
     T: Copy

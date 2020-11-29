@@ -1,14 +1,21 @@
-use bevy::{input::mouse::MouseMotion, math::Mat2, input::mouse::MouseWheel, prelude::*};
+#![feature(min_const_generics, cow_is_borrowed)]
 
-mod lib;
-use lib::RotatableVector;
+use bevy::{input::mouse::MouseMotion, input::mouse::MouseWheel, prelude::*};
+
+mod utils;
+mod config;
+mod config_read;
+
+use config::Config;
+use utils::RotatableVector;
 
 fn main() {
     App::build()
         .add_resource(Msaa { samples: 4 })
-        .init_resource::<InputState>()
+        .init_resource::<MouseInputState>()
         .init_resource::<Config>()
         .add_plugins(DefaultPlugins)
+        .add_startup_system(read_config.system())
         .add_startup_system(setup.system())
         .add_system(update_player.system())
         .add_system(mouse.system())
@@ -19,6 +26,8 @@ fn main() {
 struct CameraOrientation {
     yaw: f32,
     pitch: f32,
+
+    #[allow(dead_code)]
     roll: f32,
 
     distance: f32,
@@ -27,32 +36,9 @@ struct CameraOrientation {
 }
 
 #[derive(Default)]
-struct InputState {
+struct MouseInputState {
     mouse_motion_event_reader: EventReader<MouseMotion>,
     mouse_wheel_event_reader: EventReader<MouseWheel>,
-}
-
-use serde::Deserialize;
-
-#[derive(Deserialize)]
-struct Config {
-    sens: f32,
-    zoom_sens: f32,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        let file = "./config.yaml";
-        let default_config = include_str!("./defaultConfig.yaml");
-        let config = std::fs::read_to_string(file).unwrap_or_else(move |_| {
-            let mut f = std::fs::File::create(file).expect("couldn't open new config for writing");
-            use std::io::Write;
-            f.write_all(default_config.as_bytes()).expect("Couldn't write new config ??");
-            default_config.into()
-        });
-
-        serde_yaml::from_str(&config).expect("Couldn't read config")
-    }
 }
 
 impl Default for CameraOrientation {
@@ -151,9 +137,15 @@ fn setup(
     });
 }
 
+fn read_config(
+    mut config: ResMut<Config>,
+) {
+    *config = Config::load_or_create_default();
+}
+
 fn mouse(
-    mut state: ResMut<InputState>,
-    config: ResMut<Config>,
+    mut state: ResMut<MouseInputState>,
+    config: Res<Config>,
     mouse_motion: Res<Events<MouseMotion>>,
     mouse_wheel: Res<Events<MouseWheel>>,
     mut query: Query<&mut CameraOrientation>,
@@ -185,20 +177,22 @@ fn mouse(
 fn update_player(
     time: Res<Time>,
     keyboard_input: Res<Input<KeyCode>>,
+    config: Res<Config>,
     mut player_query: Query<(&CameraOrientation, &mut Transform)>,
     mut camera_query: Query<(&PlayerCamera, Entity, &mut Transform)>,
 ) {
     let mut movement2d = Vec2::zero();
-    if keyboard_input.pressed(KeyCode::E) {
+    let [m_up, m_left, m_down, m_right] = config.movement;
+    if keyboard_input.pressed(m_up) {
         *movement2d.y_mut() += 1.;
     }
-    if keyboard_input.pressed(KeyCode::D) {
+    if keyboard_input.pressed(m_down) {
         *movement2d.y_mut() -= 1.;
     }
-    if keyboard_input.pressed(KeyCode::F) {
+    if keyboard_input.pressed(m_right) {
         *movement2d.x_mut() += 1.;
     }
-    if keyboard_input.pressed(KeyCode::S) {
+    if keyboard_input.pressed(m_left) {
         *movement2d.x_mut() -= 1.;
     }
 

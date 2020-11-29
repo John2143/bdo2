@@ -1,3 +1,6 @@
 ---
-sens: 1.0
-zoom_sens: 2.0
+sens: .5
+zoom_sens: 3.0
+
+movement: [W, A, S, D]
+jump: Space
