@@ -82,7 +82,7 @@ fn setup(
         .spawn(PbrComponents {
             mesh: player_mesh,
             transform: Transform {
-                translation: Vec3::new(0.0, 1.9, 0.0),
+                translation: Vec3::new(0.0, 0.0, 0.0),
                 ..Default::default()
             },
             material: player_material.clone(),
