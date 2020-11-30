@@ -1,4 +1,4 @@
-#![feature(min_const_generics, cow_is_borrowed)]
+#![feature(min_const_generics, cow_is_borrowed, bool_to_option)]
 
 use bevy::{input::mouse::MouseMotion, input::mouse::MouseWheel, prelude::*};
 
@@ -68,8 +68,7 @@ impl Default for CameraOrientation {
 struct UIDebugMarker;
 
 #[derive(Default)]
-struct UIDebugInfo {
-}
+struct UIDebugInfo {}
 
 impl std::fmt::Display for UIDebugInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -280,8 +279,13 @@ fn system_update_movement(
     keyboard_input: Res<Input<KeyCode>>,
     mut ui_debug: ResMut<UIDebugInfo>,
     config: Res<Config>,
-    mut player_query: Query<(&CameraOrientation, &mut Transform, &mut Physics, &mut AdvancedMovement)>,
-){
+    mut player_query: Query<(
+        &CameraOrientation,
+        &mut Transform,
+        &mut Physics,
+        &mut AdvancedMovement,
+    )>,
+) {
     let mut movement2d = Vec2::zero();
     let [m_up, m_left, m_down, m_right] = config.movement;
     if keyboard_input.pressed(m_up) {
@@ -304,11 +308,20 @@ fn system_update_movement(
     use utils::Vec2toVec3;
 
     for (player_cam, mut player_transform, mut phys, mut movement) in player_query.iter_mut() {
-        let is_in_air = if player_transform.translation.y() <= 0.0 { false } else { true };
-        movement2d *= if is_in_air { movement.movement_speed_air } else {movement.movement_speed_ground};
+        let is_in_air = if player_transform.translation.y() <= 0.0 {
+            false
+        } else {
+            true
+        };
+        movement2d *= if is_in_air {
+            movement.movement_speed_air
+        } else {
+            movement.movement_speed_ground
+        };
         movement2d *= movement.movement_acceleration / movement.movement_speed_ground;
 
-        let delta_y_vel = (phys.gravity_func)(time.seconds_since_startup as f32 - phys.last_jump, 5.0);
+        let delta_y_vel =
+            (phys.gravity_func)(time.seconds_since_startup as f32 - phys.last_jump, 5.0);
         let delta_y_vel = delta_y_vel * time.delta_seconds;
 
         phys.velocity -= Vec3::new(0.0, delta_y_vel, 0.0);
@@ -320,12 +333,14 @@ fn system_update_movement(
         phys.walking_velocity += movement2d * time.delta_seconds;
 
         if phys.walking_velocity.length() > movement.movement_speed_ground {
-            phys.walking_velocity = phys.walking_velocity.normalize() * movement.movement_speed_ground;
+            phys.walking_velocity =
+                phys.walking_velocity.normalize() * movement.movement_speed_ground;
         }
 
         println!("{:.2}", &phys.walking_velocity.length());
 
-        player_transform.translation += (phys.velocity + phys.walking_velocity.xz3()) * time.delta_seconds;
+        player_transform.translation +=
+            (phys.velocity + phys.walking_velocity.xz3()) * time.delta_seconds;
 
         if !is_in_air {
             player_transform.translation.set_y(0.0);
@@ -340,19 +355,15 @@ fn system_update_movement(
     }
 }
 
-fn setup_debug_info(
-    mut commands: Commands,
-){
-    commands.spawn(UiCameraComponents {
-        ..Default::default()
-    }).with(UIDebugMarker);
+fn setup_debug_info(mut commands: Commands) {
+    commands
+        .spawn(UiCameraComponents {
+            ..Default::default()
+        })
+        .with(UIDebugMarker);
 }
 
-fn system_update_debug_info(
-    info: Res<UIDebugInfo>,
-    mut Text: Query<(&mut Text, &UIDebugMarker)>,
-){
-}
+fn system_update_debug_info(info: Res<UIDebugInfo>, mut Text: Query<(&mut Text, &UIDebugMarker)>) {}
 
 fn system_update_player_cam(
     mut player_query: Query<(&CameraOrientation, &mut Transform)>,
