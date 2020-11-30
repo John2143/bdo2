@@ -5,6 +5,7 @@ use bevy::{input::mouse::MouseMotion, input::mouse::MouseWheel, prelude::*};
 mod camera;
 mod config;
 mod config_read;
+mod networking;
 mod ui;
 mod utils;
 
@@ -25,6 +26,7 @@ fn main() {
 
     ui::build(&mut app);
     config::build(&mut app);
+    networking::build(&mut app);
 
     app.run();
 }
@@ -326,7 +328,8 @@ fn system_update_movement(
     };
     movement2d *= phys_prop.movement_acceleration / phys_prop.movement_speed_ground;
 
-    let delta_y_vel = (phys.gravity_func)((time.seconds_since_startup - phys.last_jump) as f32, 5.0);
+    let delta_y_vel =
+        (phys.gravity_func)((time.seconds_since_startup - phys.last_jump) as f32, 5.0);
     let delta_y_vel = delta_y_vel * time.delta_seconds;
 
     phys.velocity -= Vec3::new(0.0, delta_y_vel, 0.0);

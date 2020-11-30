@@ -17,6 +17,8 @@ pub struct Config {
     pub jump: KeyCode,
     #[serde(deserialize_with = "keybind")]
     pub dash: KeyCode,
+
+    pub host_mode: bool,
 }
 
 const DEFAULT_CONFIG: &str = include_str!("../assets/default_config.yaml");
