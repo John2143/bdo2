@@ -12,8 +12,8 @@ pub struct UIDebugInfo {
 
 impl std::fmt::Display for UIDebugInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:3.2} ", self.speed)?;
-        write!(f, "{:.0} fps", self.fr)?;
+        writeln!(f, "{:3.2} m/s walk", self.speed)?;
+        writeln!(f, "{:3.0} fps", self.fr)?;
 
         Ok(())
     }
@@ -50,6 +50,13 @@ fn setup_debug_info(
                             font_size: 25.0,
                             color: Color::RED,
                         },
+                    },
+                    style: Style {
+                        margin: Rect {
+                            bottom: Val::Px(64.0),
+                            ..Default::default()
+                        },
+                        ..Default::default()
                     },
                     ..Default::default()
                 })
