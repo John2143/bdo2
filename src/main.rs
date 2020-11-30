@@ -2,19 +2,18 @@
 
 use bevy::{input::mouse::MouseMotion, input::mouse::MouseWheel, prelude::*};
 
+mod camera;
 mod config;
 mod config_read;
-mod utils;
 mod ui;
-mod camera;
+mod utils;
 
 use utils::RotatableVector;
 
 fn main() {
     let mut app = App::build();
 
-    app
-        .add_resource(Msaa { samples: 4 })
+    app.add_resource(Msaa { samples: 4 })
         .add_plugins(DefaultPlugins)
         .init_resource::<MouseInputState>()
         .add_startup_system(setup_scene.system())
@@ -22,8 +21,7 @@ fn main() {
         .add_system(system_update_player_cam.system())
         .add_system(system_update_movement.system())
         .add_system(system_window.system())
-        .add_system(system_mouse.system())
-        ;
+        .add_system(system_mouse.system());
 
     ui::build(&mut app);
     config::build(&mut app);
@@ -45,6 +43,9 @@ struct CameraOrientation {
     //meters from cam
     distance: f32,
 
+    //offset above controlled thing
+    y_offset: f32,
+
     attached_entity: Option<Entity>,
 }
 
@@ -63,6 +64,7 @@ impl Default for CameraOrientation {
             pitch: 60f32.to_radians(),
             roll: 0.,
             distance: 50.,
+            y_offset: 3.0,
             attached_entity: None,
         }
     }
@@ -161,12 +163,12 @@ fn setup_scene(
 
     commands.spawn(LightComponents {
         transform: Transform {
-            translation: Vec3::new(0.0, 5.0, 0.0),
+            translation: Vec3::new(0.0, 100.0, 0.0),
             ..Default::default()
         },
         //light: Light {
-        //color: Color::rgb(1.0, 0.5, 0.5),
-        //..Default::default()
+        //    color: Color::rgb(1.0, 0.5, 0.5),
+        //    ..Default::default()
         //},
         ..Default::default()
     });
@@ -209,6 +211,7 @@ fn setup_window(mut windows: ResMut<Windows>) {
     window.set_cursor_lock_mode(true);
     window.set_cursor_visibility(false);
     window.set_title("9.99$ game btw".into());
+    window.set_vsync(false);
 }
 
 fn system_window(
@@ -222,6 +225,11 @@ fn system_window(
         window.set_cursor_visibility(!window.cursor_visible());
         state.no_mouse_inputs = !state.no_mouse_inputs;
     }
+    if keyboard_input.just_pressed(KeyCode::End) {
+        println!("Vsync");
+        let window = windows.get_primary_mut().unwrap();
+        window.set_vsync(!window.vsync());
+    }
 }
 
 fn system_mouse(
@@ -232,23 +240,21 @@ fn system_mouse(
     mut query: Query<&mut CameraOrientation>,
 ) {
     let mut camera = query.iter_mut().next().unwrap();
-    let mut look = if let Some(event) = state.mouse_motion_event_reader.iter(&mouse_motion).next() {
-        event.delta
-    } else {
-        Vec2::zero()
-    };
+    let mut look = Vec2::zero();
+    for event in state.mouse_motion_event_reader.iter(&mouse_motion) {
+        look += event.delta;
+    }
 
-    let wheel = if let Some(event) = state.mouse_wheel_event_reader.iter(&mouse_wheel).next() {
-        event.y
-    } else {
-        0.0
-    };
+    let mut wheel = 0.0;
+    for event in state.mouse_wheel_event_reader.iter(&mouse_wheel) {
+        wheel += event.y
+    }
 
     if state.no_mouse_inputs {
         return;
     }
 
-    let look_sens = config.sens.to_radians();
+    let look_sens = config.sens.to_radians() / 10.0;
     look *= look_sens;
 
     camera.yaw += look.x();
@@ -316,10 +322,16 @@ fn system_update_movement(
 
         let movement2d = movement2d.rotate(player_cam.yaw - 90.0f32.to_radians());
         if !is_in_air {
-            phys.walking_velocity /= 1.05 / (1.0 - time.delta_seconds);
-            if phys.walking_velocity.length_squared() < 0.7 {
-                phys.walking_velocity /= 2.0 / (1.0 - time.delta_seconds);
-            }
+            let dynamic_friction = 5.0;
+            let static_friction = 15.0;
+            let mut friction_vel = phys.walking_velocity * -dynamic_friction * time.delta_seconds;
+            if phys.walking_velocity.length() < 0.1 {
+                friction_vel = phys.walking_velocity * -1.0;
+            } else {
+                friction_vel +=
+                    phys.walking_velocity.normalize() * -static_friction * time.delta_seconds;
+            };
+            phys.walking_velocity += friction_vel;
         }
         phys.walking_velocity += movement2d * time.delta_seconds;
 
@@ -329,6 +341,8 @@ fn system_update_movement(
         }
 
         ui_debug.speed = phys.walking_velocity.length();
+        ui_debug.updates += 1;
+        ui_debug.fr = 1.0 / time.delta_seconds_f64;
 
         player_transform.translation +=
             (phys.velocity + phys.walking_velocity.xz3()) * time.delta_seconds;
@@ -360,14 +374,15 @@ fn system_update_player_cam(
         player_transform.rotation = Quat::from_rotation_y(-player_cam.yaw);
 
         if let Some(camera_entity) = player_cam.attached_entity {
+            let cam_offset = Vec3::new(0.0, player_cam.y_offset, 0.0);
             let (pitch_sin, pitch_cos) = player_cam.pitch.sin_cos();
-            let cam_pos = Vec3::new(0., pitch_cos, pitch_sin).normalize() * player_cam.distance;
+            let cam_pos = Vec3::new(0., pitch_cos, pitch_sin).normalize() * player_cam.distance + cam_offset;
             for (_, e, mut camera3dtrans) in camera_query.iter_mut() {
                 if camera_entity != e {
                     continue;
                 }
                 camera3dtrans.translation = cam_pos;
-                let look = Mat4::face_toward(cam_pos, Vec3::zero(), Vec3::new(0.0, 1.0, 0.0));
+                let look = Mat4::face_toward(cam_pos, cam_offset, Vec3::new(0.0, 1.0, 0.0));
                 camera3dtrans.rotation = look.to_scale_rotation_translation().1;
             }
         }

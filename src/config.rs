@@ -60,8 +60,6 @@ fn setup_read_config(mut config: ResMut<Config>) {
 }
 
 pub fn build(app: &mut AppBuilder) {
-    app
-        .init_resource::<Config>()
-        .add_startup_system(setup_read_config.system())
-    ;
+    app.init_resource::<Config>()
+        .add_startup_system(setup_read_config.system());
 }
