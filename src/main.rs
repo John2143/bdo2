@@ -74,7 +74,7 @@ struct PhysicsProperties {
     movement_speed_ground: f32,
     movement_speed_air: f32,
     movement_acceleration: f32,
-    dash_cooldown: f32,
+    dash_cooldown: f64,
 }
 
 struct Physics {
@@ -82,8 +82,8 @@ struct Physics {
     velocity: Vec3,
     walking_velocity: Vec2,
     dash_velocity: Vec3,
-    last_jump: f32,
-    last_dash: f32,
+    last_jump: f64,
+    last_dash: f64,
 }
 
 impl Default for Physics {
@@ -326,7 +326,7 @@ fn system_update_movement(
     };
     movement2d *= phys_prop.movement_acceleration / phys_prop.movement_speed_ground;
 
-    let delta_y_vel = (phys.gravity_func)(time.seconds_since_startup as f32 - phys.last_jump, 5.0);
+    let delta_y_vel = (phys.gravity_func)((time.seconds_since_startup - phys.last_jump) as f32, 5.0);
     let delta_y_vel = delta_y_vel * time.delta_seconds;
 
     phys.velocity -= Vec3::new(0.0, delta_y_vel, 0.0);
@@ -355,9 +355,9 @@ fn system_update_movement(
 
     //dashing section
     if keyboard_input.pressed(config.dash)
-        && phys.last_dash < time.seconds_since_startup as f32 - phys_prop.dash_cooldown
+        && phys.last_dash < time.seconds_since_startup - phys_prop.dash_cooldown
     {
-        phys.last_dash = time.seconds_since_startup as f32;
+        phys.last_dash = time.seconds_since_startup;
         //phys.walking_velocity = Vec2::zero();
     }
 
@@ -373,10 +373,10 @@ fn system_update_movement(
         }
     }
 
-    let dash_time = time.seconds_since_startup as f32 - phys.last_dash;
+    let dash_time = time.seconds_since_startup - phys.last_dash;
     let dash_percent = 3.0 * dash_time;
 
-    phys.dash_velocity = movement2d_direction.xz3() * dash_falloff_func(dash_percent) * 50.0;
+    phys.dash_velocity = movement2d_direction.xz3() * dash_falloff_func(dash_percent as f32) * 50.0;
 
     ui_debug.speed = phys.walking_velocity.length() + phys.dash_velocity.length();
     ui_debug.updates += 1;
@@ -392,7 +392,7 @@ fn system_update_movement(
         if keyboard_input.pressed(config.jump) {
             phys.velocity.set_y(15.0);
             player_transform.translation.set_y(0.0 + f32::EPSILON);
-            phys.last_jump = time.seconds_since_startup as f32;
+            phys.last_jump = time.seconds_since_startup;
         }
     }
 }
