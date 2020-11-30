@@ -74,6 +74,7 @@ struct PhysicsProperties {
     movement_speed_ground: f32,
     movement_speed_air: f32,
     movement_acceleration: f32,
+    dash_cooldown: f32,
 }
 
 struct Physics {
@@ -82,7 +83,7 @@ struct Physics {
     walking_velocity: Vec2,
     dash_velocity: Vec3,
     last_jump: f32,
-    dash_cooldown: f32,
+    last_dash: f32,
 }
 
 impl Default for Physics {
@@ -91,8 +92,8 @@ impl Default for Physics {
             gravity_func: |_, _| 9.8,
             velocity: Vec3::zero(),
             walking_velocity: Vec2::zero(),
-            last_jump: -10.,
-            dash_cooldown: 0.0,
+            last_jump: 0.0,
+            last_dash: 0.0,
             dash_velocity: Vec3::zero(),
         }
     }
@@ -141,8 +142,9 @@ fn setup_scene(
         })
         .with(PhysicsProperties {
             movement_speed_ground: 15.0,
-            movement_speed_air: 2.0,
+            movement_speed_air: 1.0,
             movement_acceleration: 15.0 * 10.0,
+            dash_cooldown: 0.5,
         })
         .with(Physics {
             gravity_func: |_x, _launchvel| {
@@ -280,82 +282,117 @@ fn system_update_movement(
         &PhysicsProperties,
     )>,
 ) {
-    let mut movement2d = Vec2::zero();
+    let has_player = match player_query.iter_mut().next() {
+        Some(p) => p,
+        None => return,
+    };
+
+    let (player_cam, mut player_transform, mut phys, phys_prop) = has_player;
+
+    let mut movement2d_direction = Vec2::zero();
     let [m_up, m_left, m_down, m_right] = config.movement;
     if keyboard_input.pressed(m_up) {
-        *movement2d.y_mut() += 1.;
+        *movement2d_direction.y_mut() += 1.;
     }
     if keyboard_input.pressed(m_down) {
-        *movement2d.y_mut() -= 1.;
+        *movement2d_direction.y_mut() -= 1.;
     }
     if keyboard_input.pressed(m_right) {
-        *movement2d.x_mut() += 1.;
+        *movement2d_direction.x_mut() += 1.;
     }
     if keyboard_input.pressed(m_left) {
-        *movement2d.x_mut() -= 1.;
+        *movement2d_direction.x_mut() -= 1.;
     }
 
-    if movement2d != Vec2::zero() {
-        movement2d.normalize();
+    if movement2d_direction != Vec2::zero() {
+        movement2d_direction.normalize();
     }
 
     use utils::Vec2toVec3;
 
-    for (player_cam, mut player_transform, mut phys, phys_prop) in player_query.iter_mut() {
-        let is_in_air = if player_transform.translation.y() <= 0.0 {
-            false
+    let movement2d_direction = movement2d_direction.rotate(player_cam.yaw - 90.0f32.to_radians());
+
+    let is_in_air = if player_transform.translation.y() <= 0.0 {
+        false
+    } else {
+        true
+    };
+
+    let mut movement2d = movement2d_direction.clone();
+    movement2d *= if is_in_air {
+        phys_prop.movement_speed_air
+    } else {
+        phys_prop.movement_speed_ground
+    };
+    movement2d *= phys_prop.movement_acceleration / phys_prop.movement_speed_ground;
+
+    let delta_y_vel = (phys.gravity_func)(time.seconds_since_startup as f32 - phys.last_jump, 5.0);
+    let delta_y_vel = delta_y_vel * time.delta_seconds;
+
+    phys.velocity -= Vec3::new(0.0, delta_y_vel, 0.0);
+
+    //walking section
+    if !is_in_air {
+        //slow the player when on ground
+        let dynamic_friction = 5.0;
+        let static_friction = 15.0;
+        let mut friction_vel = phys.walking_velocity * -dynamic_friction * time.delta_seconds;
+
+        if phys.walking_velocity.length() < 0.1 {
+            //For low velocities, just stop the player
+            friction_vel = phys.walking_velocity * -1.0;
         } else {
-            true
+            friction_vel +=
+                phys.walking_velocity.normalize() * -static_friction * time.delta_seconds;
         };
-        movement2d *= if is_in_air {
-            phys_prop.movement_speed_air
+        phys.walking_velocity += friction_vel;
+    }
+    phys.walking_velocity += movement2d * time.delta_seconds;
+
+    if phys.walking_velocity.length() > phys_prop.movement_speed_ground {
+        phys.walking_velocity = phys.walking_velocity.normalize() * phys_prop.movement_speed_ground;
+    }
+
+    //dashing section
+    if keyboard_input.pressed(config.dash)
+        && phys.last_dash < time.seconds_since_startup as f32 - phys_prop.dash_cooldown
+    {
+        phys.last_dash = time.seconds_since_startup as f32;
+        //phys.walking_velocity = Vec2::zero();
+    }
+
+    fn dash_falloff_func(time: f32) -> f32 {
+        if time > 1.0 {
+            0.0
+        } else if time > 0.9 {
+            (-time + 1.0) * 0.4
+        } else if time > 0.5 {
+            (-time + 0.9).powf(0.5) * 0.4
         } else {
-            phys_prop.movement_speed_ground
-        };
-        movement2d *= phys_prop.movement_acceleration / phys_prop.movement_speed_ground;
-
-        let delta_y_vel =
-            (phys.gravity_func)(time.seconds_since_startup as f32 - phys.last_jump, 5.0);
-        let delta_y_vel = delta_y_vel * time.delta_seconds;
-
-        phys.velocity -= Vec3::new(0.0, delta_y_vel, 0.0);
-
-        let movement2d = movement2d.rotate(player_cam.yaw - 90.0f32.to_radians());
-        if !is_in_air {
-            let dynamic_friction = 5.0;
-            let static_friction = 15.0;
-            let mut friction_vel = phys.walking_velocity * -dynamic_friction * time.delta_seconds;
-            if phys.walking_velocity.length() < 0.1 {
-                friction_vel = phys.walking_velocity * -1.0;
-            } else {
-                friction_vel +=
-                    phys.walking_velocity.normalize() * -static_friction * time.delta_seconds;
-            };
-            phys.walking_velocity += friction_vel;
+            1.0
         }
-        phys.walking_velocity += movement2d * time.delta_seconds;
+    }
 
-        if phys.walking_velocity.length() > phys_prop.movement_speed_ground {
-            phys.walking_velocity =
-                phys.walking_velocity.normalize() * phys_prop.movement_speed_ground;
-        }
+    let dash_time = time.seconds_since_startup as f32 - phys.last_dash;
+    let dash_percent = 3.0 * dash_time;
 
-        ui_debug.speed = phys.walking_velocity.length();
-        ui_debug.updates += 1;
-        ui_debug.fr = 1.0 / time.delta_seconds_f64;
+    phys.dash_velocity = movement2d_direction.xz3() * dash_falloff_func(dash_percent) * 50.0;
 
-        player_transform.translation +=
-            (phys.velocity + phys.walking_velocity.xz3()) * time.delta_seconds;
+    ui_debug.speed = phys.walking_velocity.length() + phys.dash_velocity.length();
+    ui_debug.updates += 1;
+    ui_debug.fr = 1.0 / time.delta_seconds_f64;
 
-        if !is_in_air {
-            player_transform.translation.set_y(0.0);
-            phys.velocity.set_y(0.0);
+    player_transform.translation +=
+        (phys.velocity + phys.walking_velocity.xz3() + phys.dash_velocity) * time.delta_seconds;
 
-            if keyboard_input.pressed(config.jump) {
-                phys.velocity.set_y(15.0);
-                player_transform.translation.set_y(0.0 + f32::EPSILON);
-                phys.last_jump = time.seconds_since_startup as f32;
-            }
+    if !is_in_air {
+        player_transform.translation.set_y(0.0);
+        phys.velocity.set_y(0.0);
+
+        if keyboard_input.pressed(config.jump) {
+            phys.velocity.set_y(15.0);
+            player_transform.translation.set_y(0.0 + f32::EPSILON);
+            phys.last_jump = time.seconds_since_startup as f32;
         }
     }
 }
@@ -376,7 +413,8 @@ fn system_update_player_cam(
         if let Some(camera_entity) = player_cam.attached_entity {
             let cam_offset = Vec3::new(0.0, player_cam.y_offset, 0.0);
             let (pitch_sin, pitch_cos) = player_cam.pitch.sin_cos();
-            let cam_pos = Vec3::new(0., pitch_cos, pitch_sin).normalize() * player_cam.distance + cam_offset;
+            let cam_pos =
+                Vec3::new(0., pitch_cos, pitch_sin).normalize() * player_cam.distance + cam_offset;
             for (_, e, mut camera3dtrans) in camera_query.iter_mut() {
                 if camera_entity != e {
                     continue;
