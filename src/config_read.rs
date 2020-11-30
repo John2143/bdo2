@@ -110,14 +110,13 @@ const KEYCODES: &[(&str, KeyCode)] = {
 };
 
 pub fn str_to_keybind<'a, E: de::Error>(s: &str) -> Result<KeyCode, E> {
-    let map_entry = KEYCODES
-        .iter()
-        .find_map(|(name, value)| (name == &s).then_some(value));
-
-    match map_entry {
-        Some(key) => Ok(*key),
-        None => Err(E::custom(format!("{} is not the name of a valid key", &s))),
+    for (name, keycode) in KEYCODES.iter() {
+        if name == &s {
+            return Ok(*keycode);
+        }
     }
+
+    Err(E::custom(format!("{} is not the name of a valid key", &s)))
 }
 
 #[cfg(test)]

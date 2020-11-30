@@ -1,4 +1,4 @@
-#![feature(min_const_generics, cow_is_borrowed, bool_to_option)]
+#![feature(min_const_generics, cow_is_borrowed)]
 
 use bevy::{input::mouse::MouseMotion, input::mouse::MouseWheel, prelude::*};
 
