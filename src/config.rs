@@ -54,3 +54,14 @@ impl Default for Config {
 fn default_config_valid() {
     Config::default();
 }
+
+fn setup_read_config(mut config: ResMut<Config>) {
+    *config = Config::load_or_create_default();
+}
+
+pub fn build(app: &mut AppBuilder) {
+    app
+        .init_resource::<Config>()
+        .add_startup_system(setup_read_config.system())
+    ;
+}

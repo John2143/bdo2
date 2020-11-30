@@ -1,7 +1,8 @@
 use bevy::prelude::*;
 
-pub struct UIDebugMarker;
-
+///All info Displayed in Debug screen, updated by various systems
+//TODO: should probably be an Arc mutex to help parallelization, not sure if bevy does that by
+//default
 #[derive(Default)]
 pub struct UIDebugInfo {
     pub speed: f32,
@@ -14,6 +15,9 @@ impl std::fmt::Display for UIDebugInfo {
         Ok(())
     }
 }
+
+///Component for Debug UI Text
+struct UIDebugMarker;
 
 fn setup_debug_info(
     mut commands: Commands,
@@ -62,6 +66,7 @@ fn system_update_debug_info(
 
 pub fn build(app: &mut AppBuilder) { 
     app
+        .init_resource::<UIDebugInfo>()
         .add_startup_system(setup_debug_info.system())
         .add_system(system_update_debug_info.system());
 }

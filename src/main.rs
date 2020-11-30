@@ -6,8 +6,8 @@ mod config;
 mod config_read;
 mod utils;
 mod ui;
+mod camera;
 
-use config::Config;
 use utils::RotatableVector;
 
 fn main() {
@@ -17,9 +17,6 @@ fn main() {
         .add_resource(Msaa { samples: 4 })
         .add_plugins(DefaultPlugins)
         .init_resource::<MouseInputState>()
-        .init_resource::<Config>()
-        .init_resource::<ui::UIDebugInfo>()
-        .add_startup_system(setup_read_config.system())
         .add_startup_system(setup_scene.system())
         .add_startup_system(setup_window.system())
         .add_system(system_update_player_cam.system())
@@ -29,6 +26,7 @@ fn main() {
         ;
 
     ui::build(&mut app);
+    config::build(&mut app);
 
     app.run();
 }
@@ -206,10 +204,6 @@ fn setup_scene(
     });
 }
 
-fn setup_read_config(mut config: ResMut<Config>) {
-    *config = Config::load_or_create_default();
-}
-
 fn setup_window(mut windows: ResMut<Windows>) {
     let window = windows.get_primary_mut().unwrap();
     window.set_cursor_lock_mode(true);
@@ -232,7 +226,7 @@ fn system_window(
 
 fn system_mouse(
     mut state: ResMut<MouseInputState>,
-    config: Res<Config>,
+    config: Res<config::Config>,
     mouse_motion: Res<Events<MouseMotion>>,
     mouse_wheel: Res<Events<MouseWheel>>,
     mut query: Query<&mut CameraOrientation>,
@@ -272,7 +266,7 @@ fn system_update_movement(
     time: Res<Time>,
     keyboard_input: Res<Input<KeyCode>>,
     mut ui_debug: ResMut<ui::UIDebugInfo>,
-    config: Res<Config>,
+    config: Res<config::Config>,
     mut player_query: Query<(
         &CameraOrientation,
         &mut Transform,
@@ -301,7 +295,7 @@ fn system_update_movement(
 
     use utils::Vec2toVec3;
 
-    for (player_cam, mut player_transform, mut phys, mut phys_prop) in player_query.iter_mut() {
+    for (player_cam, mut player_transform, mut phys, phys_prop) in player_query.iter_mut() {
         let is_in_air = if player_transform.translation.y() <= 0.0 {
             false
         } else {
