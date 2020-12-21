@@ -30,7 +30,7 @@ struct NetworkingQueues {
 struct NetworkEnt;
 
 fn setup_networking(
-    mut commands: Commands,
+    commands: &mut Commands,
     mut netqueues: ResMut<NetworkingQueues>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -50,7 +50,7 @@ fn setup_networking(
     let player_mesh = assets_server.load("cube.gltf#Mesh0/Primitive0");
 
     commands
-        .spawn(PbrComponents {
+        .spawn(PbrBundle {
             mesh: player_mesh,
             material: materials.add(Color::GREEN.into()),
             transform: Transform {
@@ -146,9 +146,9 @@ fn system_update_networking(
     mut net_player_query: Query<(&NetworkEnt, &mut Transform)>,
 ) {
     //prevent flooding of the out queue
-    timer.0.tick(time.delta_seconds);
+    timer.0.tick(time.delta_seconds());
 
-    if !timer.0.just_finished {
+    if !timer.0.just_finished() {
         return;
     }
 

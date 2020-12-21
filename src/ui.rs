@@ -23,15 +23,15 @@ impl std::fmt::Display for UIDebugInfo {
 struct UIDebugMarker;
 
 fn setup_debug_info(
-    mut commands: Commands,
+    commands: &mut Commands,
     mut c_materials: ResMut<Assets<ColorMaterial>>,
     assets_server: Res<AssetServer>,
 ) {
     commands
-        .spawn(UiCameraComponents {
+        .spawn(CameraUiBundle {
             ..Default::default()
         })
-        .spawn(NodeComponents {
+        .spawn(NodeBundle {
             style: Style {
                 //Entire screen
                 size: Size::new(Val::Auto, Val::Auto),
@@ -42,13 +42,14 @@ fn setup_debug_info(
         })
         .with_children(|thing| {
             thing
-                .spawn(TextComponents {
+                .spawn(TextBundle {
                     text: Text {
                         value: "Something wrong with debug text monkaS".to_string(),
                         font: assets_server.load("JetBrainsMono-Regular.ttf"),
                         style: TextStyle {
                             font_size: 25.0,
                             color: Color::RED,
+                            alignment: TextAlignment::default(),
                         },
                     },
                     style: Style {

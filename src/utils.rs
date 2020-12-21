@@ -34,9 +34,7 @@ pub trait RotatableVector<RotateInput> {
 ///Rotates around origin counter clockwise
 impl RotatableVector<f32> for Vec2 {
     fn rotate(self, theta: f32) -> Self {
-        let (x, y) = (self.x(), self.y());
-
-        let ang = x.atan2(y);
+        let ang = self.x.atan2(self.y);
         let ang = (ang + theta).sin_cos();
         Vec2::new(ang.1, ang.0) * self.length()
     }
@@ -60,7 +58,7 @@ pub trait Vec3toVec2 {
 
 impl Vec3toVec2 for Vec3 {
     fn xz2(self) -> Vec2 {
-        Vec2::new(self.x(), self.z())
+        Vec2::new(self.x, self.z)
     }
 }
 
@@ -75,6 +73,6 @@ impl Vec2toVec3 for Vec2 {
     }
 
     fn xz3_withy(self, y: f32) -> Vec3 {
-        Vec3::new(self.x(), y, self.y())
+        Vec3::new(self.x, y, self.y)
     }
 }

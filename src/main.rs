@@ -105,7 +105,7 @@ struct PlayerCamera;
 
 /// set up a simple 3D scene
 fn setup_scene(
-    mut commands: Commands,
+    commands: &mut Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     assets_server: Res<AssetServer>,
@@ -118,7 +118,7 @@ fn setup_scene(
 
     // add entities to the world
     let e = commands
-        .spawn(Camera3dComponents::default())
+        .spawn(Camera3dBundle::default())
         .with(PlayerCamera)
         .current_entity()
         .unwrap();
@@ -128,7 +128,7 @@ fn setup_scene(
     //commands.spawn_scene(player_mesh);
 
     let player = commands
-        .spawn(PbrComponents {
+        .spawn(PbrBundle {
             mesh: player_mesh,
             transform: Transform {
                 translation: Vec3::new(0.0, 0.0, 0.0),
@@ -164,7 +164,7 @@ fn setup_scene(
     //let the camera transform/rotate with the player.
     commands.push_children(player.unwrap(), &[e]);
 
-    commands.spawn(LightComponents {
+    commands.spawn(LightBundle {
         transform: Transform {
             translation: Vec3::new(0.0, 100.0, 0.0),
             ..Default::default()
@@ -178,7 +178,7 @@ fn setup_scene(
 
     let floor_handle = assets_server.load("floor.png");
 
-    commands.spawn(PbrComponents {
+    commands.spawn(PbrBundle {
         mesh: meshes.add(Mesh::from(shape::Plane { size: 20000.0 })),
         material: materials.add(floor_handle.into()),
         ..Default::default()
@@ -186,7 +186,7 @@ fn setup_scene(
 
     let cubes = [(5.0, 1.0, 5.0), (25.0, 1.0, 45.0), (-20.0, 1.0, 0.0)];
     for cube in &cubes {
-        commands.spawn(PbrComponents {
+        commands.spawn(PbrBundle {
             mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
             material: materials.add(Color::rgb(0.5, 0.5, 0.5).into()),
             transform: Transform {
@@ -198,7 +198,7 @@ fn setup_scene(
     }
 
     //banana
-    commands.spawn(PbrComponents {
+    commands.spawn(PbrBundle {
         mesh: meshes.add(Mesh::from(shape::Cube { size: 0.2 })),
         material: materials.add(Color::rgb(1.0, 0.92, 0.21).into()),
         transform: Transform {
@@ -260,8 +260,8 @@ fn system_mouse(
     let look_sens = config.sens.to_radians() / 10.0;
     look *= look_sens;
 
-    camera.yaw += look.x();
-    camera.pitch -= look.y();
+    camera.yaw += look.x;
+    camera.pitch -= look.y;
     camera.distance -= wheel * config.zoom_sens;
 
     camera.pitch = camera
@@ -293,16 +293,16 @@ fn system_update_movement(
     let mut movement2d_direction = Vec2::zero();
     let [m_up, m_left, m_down, m_right] = config.movement;
     if keyboard_input.pressed(m_up) {
-        *movement2d_direction.y_mut() += 1.;
+        movement2d_direction.y += 1.;
     }
     if keyboard_input.pressed(m_down) {
-        *movement2d_direction.y_mut() -= 1.;
+        movement2d_direction.y -= 1.;
     }
     if keyboard_input.pressed(m_right) {
-        *movement2d_direction.x_mut() += 1.;
+        movement2d_direction.x += 1.;
     }
     if keyboard_input.pressed(m_left) {
-        *movement2d_direction.x_mut() -= 1.;
+        movement2d_direction.x -= 1.;
     }
 
     if movement2d_direction != Vec2::zero() {
@@ -313,7 +313,7 @@ fn system_update_movement(
 
     let movement2d_direction = movement2d_direction.rotate(player_cam.yaw - 90.0f32.to_radians());
 
-    let is_in_air = if player_transform.translation.y() <= 0.0 {
+    let is_in_air = if player_transform.translation.y <= 0.0 {
         false
     } else {
         true
@@ -328,8 +328,8 @@ fn system_update_movement(
     movement2d *= phys_prop.movement_acceleration / phys_prop.movement_speed_ground;
 
     let delta_y_vel =
-        (phys.gravity_func)((time.seconds_since_startup - phys.last_jump) as f32, 5.0);
-    let delta_y_vel = delta_y_vel * time.delta_seconds;
+        (phys.gravity_func)((time.seconds_since_startup() - phys.last_jump) as f32, 5.0);
+    let delta_y_vel = delta_y_vel * time.delta_seconds();
 
     phys.velocity -= Vec3::new(0.0, delta_y_vel, 0.0);
 
@@ -338,18 +338,18 @@ fn system_update_movement(
         //slow the player when on ground
         let dynamic_friction = 5.0;
         let static_friction = 15.0;
-        let mut friction_vel = phys.walking_velocity * -dynamic_friction * time.delta_seconds;
+        let mut friction_vel = phys.walking_velocity * -dynamic_friction * time.delta_seconds();
 
         if phys.walking_velocity.length() < 0.1 {
             //For low velocities, just stop the player
             friction_vel = phys.walking_velocity * -1.0;
         } else {
             friction_vel +=
-                phys.walking_velocity.normalize() * -static_friction * time.delta_seconds;
+                phys.walking_velocity.normalize() * -static_friction * time.delta_seconds();
         };
         phys.walking_velocity += friction_vel;
     }
-    phys.walking_velocity += movement2d * time.delta_seconds;
+    phys.walking_velocity += movement2d * time.delta_seconds();
 
     if phys.walking_velocity.length() > phys_prop.movement_speed_ground {
         phys.walking_velocity = phys.walking_velocity.normalize() * phys_prop.movement_speed_ground;
@@ -357,9 +357,9 @@ fn system_update_movement(
 
     //dashing section
     if keyboard_input.pressed(config.dash)
-        && phys.last_dash < time.seconds_since_startup - phys_prop.dash_cooldown
+        && phys.last_dash < time.seconds_since_startup() - phys_prop.dash_cooldown
     {
-        phys.last_dash = time.seconds_since_startup;
+        phys.last_dash = time.seconds_since_startup();
         //phys.walking_velocity = Vec2::zero();
     }
 
@@ -375,26 +375,26 @@ fn system_update_movement(
         }
     }
 
-    let dash_time = time.seconds_since_startup - phys.last_dash;
+    let dash_time = time.seconds_since_startup() - phys.last_dash;
     let dash_percent = 3.0 * dash_time;
 
     phys.dash_velocity = movement2d_direction.xz3() * dash_falloff_func(dash_percent as f32) * 50.0;
 
     ui_debug.speed = phys.walking_velocity.length() + phys.dash_velocity.length();
     ui_debug.updates += 1;
-    ui_debug.fr = 1.0 / time.delta_seconds_f64;
+    ui_debug.fr = 1.0 / time.delta_seconds_f64();
 
     player_transform.translation +=
-        (phys.velocity + phys.walking_velocity.xz3() + phys.dash_velocity) * time.delta_seconds;
+        (phys.velocity + phys.walking_velocity.xz3() + phys.dash_velocity) * time.delta_seconds();
 
     if !is_in_air {
-        player_transform.translation.set_y(0.0);
-        phys.velocity.set_y(0.0);
+        player_transform.translation.y = 0.0;
+        phys.velocity.y = 0.0;
 
         if keyboard_input.pressed(config.jump) {
-            phys.velocity.set_y(15.0);
-            player_transform.translation.set_y(0.0 + f32::EPSILON);
-            phys.last_jump = time.seconds_since_startup;
+            phys.velocity.y = 15.0;
+            player_transform.translation.y = 0.0 + f32::EPSILON;
+            phys.last_jump = time.seconds_since_startup();
         }
     }
 }
