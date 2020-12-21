@@ -1,7 +1,13 @@
 #![allow(dead_code, unused_variables, unused_mut)]
-use std::{io::{Read, Write}, net::{TcpListener, TcpStream}, sync::Arc, time::Duration, sync::Mutex};
-use std::thread;
 use bevy::prelude::*;
+use std::thread;
+use std::{
+    io::{Read, Write},
+    net::{TcpListener, TcpStream},
+    sync::Arc,
+    sync::Mutex,
+    time::Duration,
+};
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -43,19 +49,20 @@ fn setup_networking(
 
     let player_mesh = assets_server.load("cube.gltf#Mesh0/Primitive0");
 
-    commands.spawn(PbrComponents {
-        mesh: player_mesh,
-        material: materials.add(Color::GREEN.into()),
-        transform: Transform {
-            translation: Vec3::new(0.0, 0.0, 0.0),
+    commands
+        .spawn(PbrComponents {
+            mesh: player_mesh,
+            material: materials.add(Color::GREEN.into()),
+            transform: Transform {
+                translation: Vec3::new(0.0, 0.0, 0.0),
+                ..Default::default()
+            },
             ..Default::default()
-        },
-        ..Default::default()
-    })
-    .with(NetworkEnt);
+        })
+        .with(NetworkEnt);
 }
 
-fn handle_incoming(mut person: TcpStream, inc: NetworkQueue){
+fn handle_incoming(mut person: TcpStream, inc: NetworkQueue) {
     loop {
         let mut buf = [0; 10000];
         let read = person.read(&mut buf).unwrap();
@@ -69,7 +76,7 @@ fn handle_incoming(mut person: TcpStream, inc: NetworkQueue){
 
         for json in msg.split("\n") {
             if json.len() == 0 {
-                break
+                break;
             }
             let k: NetworkingAction = serde_json::from_str(&json).unwrap();
 
@@ -78,7 +85,7 @@ fn handle_incoming(mut person: TcpStream, inc: NetworkQueue){
     }
 }
 
-fn handle_outgoing(mut stream: TcpStream, out: NetworkQueue){
+fn handle_outgoing(mut stream: TcpStream, out: NetworkQueue) {
     loop {
         //empty the outs queue because we're using it now
         let outs = std::mem::replace(&mut *out.lock().unwrap(), Vec::new());
@@ -91,7 +98,6 @@ fn handle_outgoing(mut stream: TcpStream, out: NetworkQueue){
         }
     }
 }
-
 
 fn start_host(inc: NetworkQueue, out: NetworkQueue) {
     thread::spawn(move || {
@@ -121,8 +127,12 @@ fn start_player(inc: NetworkQueue, out: NetworkQueue) {
     let mut stream_in = TcpStream::connect("john2143.com:8879").unwrap();
     let mut stream_out = TcpStream::connect("john2143.com:8878").unwrap();
 
-    thread::spawn(move || {handle_outgoing(stream_out, out); });
-    thread::spawn(move || {handle_incoming(stream_in, inc); });
+    thread::spawn(move || {
+        handle_outgoing(stream_out, out);
+    });
+    thread::spawn(move || {
+        handle_incoming(stream_in, inc);
+    });
 }
 
 struct NetworkingTimer(Timer);
@@ -135,7 +145,6 @@ fn system_update_networking(
     mut player_query: Query<(&crate::CameraOrientation, &Transform)>,
     mut net_player_query: Query<(&NetworkEnt, &mut Transform)>,
 ) {
-
     //prevent flooding of the out queue
     timer.0.tick(time.delta_seconds);
 
@@ -146,7 +155,10 @@ fn system_update_networking(
     for (_, mut transform) in player_query.iter() {
         if let Ok(mut out) = nets.outgoing.lock() {
             if out.len() < 3 {
-                out.push(NetworkingAction::Location(transform.rotation, transform.translation));
+                out.push(NetworkingAction::Location(
+                    transform.rotation,
+                    transform.translation,
+                ));
             }
         }
     }
@@ -157,21 +169,20 @@ fn system_update_networking(
             match item {
                 NetworkingAction::Print(s) => {
                     println!("net says {}", s);
-                },
+                }
                 NetworkingAction::Location(rot, tran) => {
                     transform.rotation = *rot;
                     transform.translation = *tran;
-                },
-                NetworkingAction::Done => {},
+                }
+                NetworkingAction::Done => {}
             }
         }
     }
 }
 
-
 pub fn build(app: &mut AppBuilder) {
     app.init_resource::<NetworkingQueues>()
-        .add_resource(NetworkingTimer(Timer::from_seconds(1.0/120.0, true)))
+        .add_resource(NetworkingTimer(Timer::from_seconds(1.0 / 120.0, true)))
         .add_startup_system(setup_networking.system())
         .add_system(system_update_networking.system());
 }

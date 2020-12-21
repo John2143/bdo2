@@ -1,6 +1,5 @@
 use bevy::prelude::*;
 
-use crate::config_read::{keybind, keybind_list};
 use serde::Deserialize;
 use std::path::Path;
 
@@ -11,11 +10,8 @@ pub struct Config {
     pub zoom_sens: f32,
 
     ///up, left, down, right
-    #[serde(deserialize_with = "keybind_list")]
     pub movement: [KeyCode; 4],
-    #[serde(deserialize_with = "keybind")]
     pub jump: KeyCode,
-    #[serde(deserialize_with = "keybind")]
     pub dash: KeyCode,
 
     pub host_mode: bool,

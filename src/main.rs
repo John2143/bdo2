@@ -4,7 +4,6 @@ use bevy::{input::mouse::MouseMotion, input::mouse::MouseWheel, prelude::*};
 
 mod camera;
 mod config;
-mod config_read;
 mod networking;
 mod ui;
 mod utils;
@@ -180,7 +179,7 @@ fn setup_scene(
     let floor_handle = assets_server.load("floor.png");
 
     commands.spawn(PbrComponents {
-        mesh: meshes.add(Mesh::from(shape::Plane { size: 2000.0 })),
+        mesh: meshes.add(Mesh::from(shape::Plane { size: 20000.0 })),
         material: materials.add(floor_handle.into()),
         ..Default::default()
     });
