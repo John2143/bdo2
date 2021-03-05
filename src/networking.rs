@@ -78,6 +78,9 @@ fn handle_incoming(mut person: TcpStream, inc: NetworkQueue) {
             if json.len() == 0 {
                 break;
             }
+
+            info!("{}", &json);
+
             let k: NetworkingAction = serde_json::from_str(&json).unwrap();
 
             inc.lock().unwrap().push(k);
@@ -168,7 +171,7 @@ fn system_update_networking(
         for item in ins.iter() {
             match item {
                 NetworkingAction::Print(s) => {
-                    println!("net says {}", s);
+                    info!("net says {}", s);
                 }
                 NetworkingAction::Location(rot, tran) => {
                     transform.rotation = *rot;

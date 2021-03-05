@@ -7,6 +7,7 @@ mod config;
 mod networking;
 mod ui;
 mod utils;
+mod projectile;
 
 use utils::RotatableVector;
 
@@ -26,6 +27,7 @@ fn main() {
     ui::build(&mut app);
     config::build(&mut app);
     networking::build(&mut app);
+    projectile::build(&mut app);
 
     app.run();
 }
@@ -65,7 +67,7 @@ impl Default for CameraOrientation {
             pitch: 60f32.to_radians(),
             roll: 0.,
             distance: 50.,
-            y_offset: 3.0,
+            y_offset: 5.0,
             attached_entity: None,
         }
     }
@@ -159,27 +161,41 @@ fn setup_scene(
             last_jump: -100.0,
             ..Default::default()
         })
+        //.with_children(|k| {
+            //k.spawn(PbrBundle {
+                //mesh: meshes.add(Mesh::from(shape::Cube { size: 0.1 })),
+                //transform: Transform {
+                    //translation: Vec3::new(0.0, 7.0, 0.0),
+                    //..Default::default()
+                //},
+                //material: player_material.clone(),
+                //..Default::default()
+            //});
+        //})
         .current_entity();
 
     //let the camera transform/rotate with the player.
     commands.push_children(player.unwrap(), &[e]);
 
-    commands.spawn(LightBundle {
-        transform: Transform {
-            translation: Vec3::new(0.0, 100.0, 0.0),
+    for (x, y) in &[(5.0, 5.0), (-5.0, 5.0), (5.0, -5.0), (-5.0, -5.0)] {
+
+        commands.spawn(LightBundle {
+            transform: Transform {
+                translation: Vec3::new(*x, 500.0, *y),
+                ..Default::default()
+            },
+            //light: Light {
+            //    color: Color::rgb(1.0, 0.5, 0.5),
+            //    ..Default::default()
+            //},
             ..Default::default()
-        },
-        //light: Light {
-        //    color: Color::rgb(1.0, 0.5, 0.5),
-        //    ..Default::default()
-        //},
-        ..Default::default()
-    });
+        });
+    }
 
     let floor_handle = assets_server.load("floor.png");
 
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Plane { size: 20000.0 })),
+        mesh: meshes.add(Mesh::from(shape::Plane { size: 2000.0 })),
         material: materials.add(floor_handle.into()),
         ..Default::default()
     });
@@ -214,7 +230,7 @@ fn setup_window(mut windows: ResMut<Windows>) {
     window.set_cursor_lock_mode(true);
     window.set_cursor_visibility(false);
     window.set_title("9.99$ game btw".into());
-    window.set_vsync(false);
+    window.set_vsync(true);
 }
 
 fn system_window(
@@ -229,7 +245,7 @@ fn system_window(
         state.no_mouse_inputs = !state.no_mouse_inputs;
     }
     if keyboard_input.just_pressed(KeyCode::End) {
-        println!("Vsync");
+        info!("Vsync");
         let window = windows.get_primary_mut().unwrap();
         window.set_vsync(!window.vsync());
     }
@@ -426,5 +442,12 @@ fn system_update_player_cam(
                 camera3dtrans.rotation = look.to_scale_rotation_translation().1;
             }
         }
+    }
+}
+
+impl CameraOrientation {
+    fn xy_vector(&self) -> Vec3 {
+        let (sin, cos) = self.yaw.sin_cos();
+        -Vec3::new(-sin, 0.0, cos)
     }
 }
