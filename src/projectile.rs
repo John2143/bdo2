@@ -7,7 +7,7 @@ fn setup(
 struct Proj(Vec3, f32);
 
 fn update(
-    commands: &mut Commands,
+    mut commands: Commands,
     //time: Res<Time>,
     //config: Res<crate::config::Config>,
     //keyboard_input: Res<Input<KeyCode>>,
@@ -17,26 +17,25 @@ fn update(
     mut player_query: Query<(&crate::CameraOrientation, &Transform)>,
 ) {
     if mouse_input.pressed(MouseButton::Left) {
-        //info!("Firing proj");
         let (orientation, pos) = match player_query.iter_mut().next() {
             Some(p) => p,
             None => return,
         };
 
-        commands.spawn(PbrBundle {
+        commands.spawn_bundle(PbrBundle {
             mesh: meshes.add(Mesh::from(shape::Cube { size: 0.2 })),
             material: materials.add(Color::PURPLE.into()),
             transform: Transform {
-                translation: pos.translation + Vec3::unit_y() * 2.0,
+                translation: pos.translation + Vec3::Y * 2.0,
                 ..Default::default()
             },
             ..Default::default()
-        }).with(Proj(orientation.xy_vector() * 100.0, 5.0));
+        }).insert(Proj(orientation.xy_vector() * 100.0, 5.0));
     }
 }
 
 fn move_proj(
-    commands: &mut Commands,
+    mut commands: Commands,
     time: Res<Time>,
     mut projs: Query<(Entity, &mut Proj, &mut Transform)>,
 ) {
@@ -44,7 +43,7 @@ fn move_proj(
         transform.translation += time.delta_seconds() * proj_data.0;
         proj_data.1 -= time.delta_seconds();
         if proj_data.1 <= 0.0 {
-            commands.despawn(id);
+            commands.entity(id).despawn_recursive();
         }
     }
 }

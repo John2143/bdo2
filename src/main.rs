@@ -1,4 +1,4 @@
-#![feature(min_const_generics, cow_is_borrowed)]
+#![feature(cow_is_borrowed)]
 
 use bevy::{input::mouse::MouseMotion, input::mouse::MouseWheel, prelude::*};
 
@@ -14,7 +14,7 @@ use utils::RotatableVector;
 fn main() {
     let mut app = App::build();
 
-    app.add_resource(Msaa { samples: 4 })
+    app.insert_resource(Msaa { samples: 4 })
         .add_plugins(DefaultPlugins)
         .init_resource::<MouseInputState>()
         .add_startup_system(setup_scene.system())
@@ -56,8 +56,6 @@ struct CameraOrientation {
 struct MouseInputState {
     //set to true if events should be chomped
     no_mouse_inputs: bool,
-    mouse_motion_event_reader: EventReader<MouseMotion>,
-    mouse_wheel_event_reader: EventReader<MouseWheel>,
 }
 
 impl Default for CameraOrientation {
@@ -93,11 +91,11 @@ impl Default for Physics {
     fn default() -> Self {
         Self {
             gravity_func: |_, _| 9.8,
-            velocity: Vec3::zero(),
-            walking_velocity: Vec2::zero(),
+            velocity: Vec3::ZERO,
+            walking_velocity: Vec2::ZERO,
             last_jump: 0.0,
             last_dash: 0.0,
-            dash_velocity: Vec3::zero(),
+            dash_velocity: Vec3::ZERO,
         }
     }
 }
@@ -107,30 +105,23 @@ struct PlayerCamera;
 
 /// set up a simple 3D scene
 fn setup_scene(
-    commands: &mut Commands,
+    mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     assets_server: Res<AssetServer>,
 ) {
-    let player_material = materials.add({
-        let mut q = StandardMaterial::from(Color::rgb(1.0, 0.5, 0.0));
-        q.shaded = true;
-        q
-    });
+    let player_material = materials.add(StandardMaterial::from(Color::rgb(1.0, 0.5, 0.0)));
 
     // add entities to the world
     let e = commands
-        .spawn(Camera3dBundle::default())
-        .with(PlayerCamera)
-        .current_entity()
-        .unwrap();
+        .spawn_bundle(PerspectiveCameraBundle::default())
+        .insert(PlayerCamera)
+        .id();
 
     let player_mesh = assets_server.load("cube.gltf#Mesh0/Primitive0");
 
-    //commands.spawn_scene(player_mesh);
-
     let player = commands
-        .spawn(PbrBundle {
+        .spawn_bundle(PbrBundle {
             mesh: player_mesh,
             transform: Transform {
                 translation: Vec3::new(0.0, 0.0, 0.0),
@@ -139,17 +130,15 @@ fn setup_scene(
             material: player_material.clone(),
             ..Default::default()
         })
-        .with(CameraOrientation {
+        .insert_bundle((CameraOrientation {
             attached_entity: Some(e),
             ..Default::default()
-        })
-        .with(PhysicsProperties {
+        }, PhysicsProperties {
             movement_speed_ground: 15.0,
             movement_speed_air: 1.0,
             movement_acceleration: 15.0 * 10.0,
             dash_cooldown: 0.5,
-        })
-        .with(Physics {
+        }, Physics {
             gravity_func: |_x, _launchvel| {
                 //let offset = 25.0;
                 //35f32.min((x - 0.5).powf(2.0) + offset)
@@ -160,41 +149,24 @@ fn setup_scene(
             },
             last_jump: -100.0,
             ..Default::default()
-        })
-        //.with_children(|k| {
-            //k.spawn(PbrBundle {
-                //mesh: meshes.add(Mesh::from(shape::Cube { size: 0.1 })),
-                //transform: Transform {
-                    //translation: Vec3::new(0.0, 7.0, 0.0),
-                    //..Default::default()
-                //},
-                //material: player_material.clone(),
-                //..Default::default()
-            //});
-        //})
-        .current_entity();
+        }))
+        .id();
 
-    //let the camera transform/rotate with the player.
-    commands.push_children(player.unwrap(), &[e]);
+    commands.entity(player).push_children(&[e]);
 
     for (x, y) in &[(5.0, 5.0), (-5.0, 5.0), (5.0, -5.0), (-5.0, -5.0)] {
-
-        commands.spawn(LightBundle {
+        commands.spawn_bundle(LightBundle {
             transform: Transform {
-                translation: Vec3::new(*x, 500.0, *y),
+                translation: Vec3::new(*x, 50.0, *y),
                 ..Default::default()
             },
-            //light: Light {
-            //    color: Color::rgb(1.0, 0.5, 0.5),
-            //    ..Default::default()
-            //},
             ..Default::default()
         });
     }
 
     let floor_handle = assets_server.load("floor.png");
 
-    commands.spawn(PbrBundle {
+    commands.spawn_bundle(PbrBundle {
         mesh: meshes.add(Mesh::from(shape::Plane { size: 2000.0 })),
         material: materials.add(floor_handle.into()),
         ..Default::default()
@@ -202,7 +174,7 @@ fn setup_scene(
 
     let cubes = [(5.0, 1.0, 5.0), (25.0, 1.0, 45.0), (-20.0, 1.0, 0.0)];
     for cube in &cubes {
-        commands.spawn(PbrBundle {
+        commands.spawn_bundle(PbrBundle {
             mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
             material: materials.add(Color::rgb(0.5, 0.5, 0.5).into()),
             transform: Transform {
@@ -214,7 +186,7 @@ fn setup_scene(
     }
 
     //banana
-    commands.spawn(PbrBundle {
+    commands.spawn_bundle(PbrBundle {
         mesh: meshes.add(Mesh::from(shape::Cube { size: 0.2 })),
         material: materials.add(Color::rgb(1.0, 0.92, 0.21).into()),
         transform: Transform {
@@ -252,24 +224,24 @@ fn system_window(
 }
 
 fn system_mouse(
-    mut state: ResMut<MouseInputState>,
+    mouse_input_state: ResMut<MouseInputState>,
     config: Res<config::Config>,
-    mouse_motion: Res<Events<MouseMotion>>,
-    mouse_wheel: Res<Events<MouseWheel>>,
+    mut mouse_motion: EventReader<MouseMotion>,
+    mut mouse_wheel: EventReader<MouseWheel>,
     mut query: Query<&mut CameraOrientation>,
 ) {
     let mut camera = query.iter_mut().next().unwrap();
-    let mut look = Vec2::zero();
-    for event in state.mouse_motion_event_reader.iter(&mouse_motion) {
+    let mut look = Vec2::ZERO;
+    for event in mouse_motion.iter() {
         look += event.delta;
     }
 
     let mut wheel = 0.0;
-    for event in state.mouse_wheel_event_reader.iter(&mouse_wheel) {
+    for event in mouse_wheel.iter() {
         wheel += event.y
     }
 
-    if state.no_mouse_inputs {
+    if mouse_input_state.no_mouse_inputs {
         return;
     }
 
@@ -306,7 +278,7 @@ fn system_update_movement(
 
     let (player_cam, mut player_transform, mut phys, phys_prop) = has_player;
 
-    let mut movement2d_direction = Vec2::zero();
+    let mut movement2d_direction = Vec2::ZERO;
     let [m_up, m_left, m_down, m_right] = config.movement;
     if keyboard_input.pressed(m_up) {
         movement2d_direction.y += 1.;
@@ -321,7 +293,7 @@ fn system_update_movement(
         movement2d_direction.x -= 1.;
     }
 
-    if movement2d_direction != Vec2::zero() {
+    if movement2d_direction != Vec2::ZERO {
         movement2d_direction.normalize();
     }
 
@@ -416,10 +388,14 @@ fn system_update_movement(
 }
 
 fn system_update_player_cam(
-    mut player_query: Query<(&CameraOrientation, &mut Transform)>,
-    mut camera_query: Query<(&PlayerCamera, Entity, &mut Transform)>,
+    mut transforms: QuerySet<(
+        Query<(&CameraOrientation, &mut Transform)>,
+        Query<(&PlayerCamera, Entity, &mut Transform)>,
+    )>,
 ) {
-    for (player_cam, mut player_transform) in player_query.iter_mut() {
+    let mut o_player_cam = None;
+
+    for (player_cam, mut player_transform) in transforms.q0_mut().iter_mut() {
         //player.yaw = remap(
         //(time.seconds_since_startup * 0.3).cos(),
         //(-1.0, 1.0),
@@ -427,20 +403,23 @@ fn system_update_player_cam(
         //) as f32;
 
         player_transform.rotation = Quat::from_rotation_y(-player_cam.yaw);
+        o_player_cam = Some(player_cam);
+    }
 
-        if let Some(camera_entity) = player_cam.attached_entity {
-            let cam_offset = Vec3::new(0.0, player_cam.y_offset, 0.0);
-            let (pitch_sin, pitch_cos) = player_cam.pitch.sin_cos();
-            let cam_pos =
-                Vec3::new(0., pitch_cos, pitch_sin).normalize() * player_cam.distance + cam_offset;
-            for (_, e, mut camera3dtrans) in camera_query.iter_mut() {
-                if camera_entity != e {
-                    continue;
-                }
-                camera3dtrans.translation = cam_pos;
-                let look = Mat4::face_toward(cam_pos, cam_offset, Vec3::new(0.0, 1.0, 0.0));
-                camera3dtrans.rotation = look.to_scale_rotation_translation().1;
+    //TODO rewrite with bevy0.5 in mind
+    if let Some(camera_entity) = o_player_cam.map(|c| c.attached_entity) {
+        let player_cam = o_player_cam.unwrap();
+        let cam_offset = Vec3::new(0.0, player_cam.y_offset, 0.0);
+        let (pitch_sin, pitch_cos) = player_cam.pitch.sin_cos();
+        let cam_pos =
+            Vec3::new(0., pitch_cos, pitch_sin).normalize() * player_cam.distance + cam_offset;
+        for (_, e, mut camera3dtrans) in transforms.q1_mut().iter_mut() {
+            if Some(e) != camera_entity {
+                continue;
             }
+            camera3dtrans.translation = cam_pos;
+            let look = Mat4::face_toward(cam_pos, cam_offset, Vec3::new(0.0, 1.0, 0.0));
+            camera3dtrans.rotation = look.to_scale_rotation_translation().1;
         }
     }
 }

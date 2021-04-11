@@ -23,15 +23,17 @@ impl std::fmt::Display for UIDebugInfo {
 struct UIDebugMarker;
 
 fn setup_debug_info(
-    commands: &mut Commands,
+    mut commands: Commands,
     mut c_materials: ResMut<Assets<ColorMaterial>>,
     assets_server: Res<AssetServer>,
 ) {
     commands
-        .spawn(CameraUiBundle {
+        .spawn_bundle(UiCameraBundle {
             ..Default::default()
-        })
-        .spawn(NodeBundle {
+        });
+
+    commands
+        .spawn_bundle(NodeBundle {
             style: Style {
                 //Entire screen
                 size: Size::new(Val::Auto, Val::Auto),
@@ -42,15 +44,19 @@ fn setup_debug_info(
         })
         .with_children(|thing| {
             thing
-                .spawn(TextBundle {
+                .spawn_bundle(TextBundle {
                     text: Text {
-                        value: "Something wrong with debug text monkaS".to_string(),
-                        font: assets_server.load("JetBrainsMono-Regular.ttf"),
-                        style: TextStyle {
-                            font_size: 25.0,
-                            color: Color::RED,
-                            alignment: TextAlignment::default(),
-                        },
+                        alignment: TextAlignment::default(),
+                        sections: vec![
+                            TextSection {
+                                value: "Something wrong with debug text monkaS".to_string(),
+                                style: TextStyle {
+                                    font_size: 25.0,
+                                    font: assets_server.load("JetBrainsMono-Regular.ttf"),
+                                    color: Color::RED,
+                                }
+                            }
+                        ],
                     },
                     style: Style {
                         margin: Rect {
@@ -61,7 +67,7 @@ fn setup_debug_info(
                     },
                     ..Default::default()
                 })
-                .with(UIDebugMarker);
+                .insert(UIDebugMarker);
         });
 }
 
@@ -69,8 +75,9 @@ fn system_update_debug_info(info: Res<UIDebugInfo>, mut text: Query<(&mut Text, 
     for (mut text, _) in text.iter_mut() {
         //prevent allocs by copying strings
         use std::fmt::Write;
-        text.value.truncate(0);
-        write!(&mut text.value, "{}", *info).unwrap();
+        let s = &mut text.sections[0].value;
+        s.truncate(0);
+        write!(s, "{}", *info).unwrap();
     }
 }
 
