@@ -12,6 +12,8 @@ use std::{
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::config::NetMode;
+
 #[derive(Deserialize, Serialize, Clone, Debug)]
 enum NetworkingAction {
     Print(String),
@@ -38,7 +40,12 @@ fn setup_networking(
     config: Res<crate::config::Config>,
     assets_server: Res<AssetServer>,
 ) {
-    let host_mode = config.host_mode;
+    let host_mode = match config.net_mode {
+        Some(NetMode::Host) => true,
+        Some(NetMode::Client) => false,
+        None => return,
+    };
+
     let (inc, out) = (netqueues.incoming.clone(), netqueues.outgoing.clone());
     let jh = thread::spawn(move || {
         if host_mode {

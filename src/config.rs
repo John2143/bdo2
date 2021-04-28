@@ -3,6 +3,12 @@ use bevy::prelude::*;
 use serde::Deserialize;
 use std::path::Path;
 
+#[derive(Deserialize)]
+pub enum NetMode {
+    Host,
+    Client,
+}
+
 ///The user keybinds and other personal settings
 #[derive(Deserialize)]
 pub struct Config {
@@ -14,7 +20,7 @@ pub struct Config {
     pub jump: KeyCode,
     pub dash: KeyCode,
 
-    pub host_mode: bool,
+    pub net_mode: Option<NetMode>,
 }
 
 const DEFAULT_CONFIG: &str = include_str!("../assets/default_config.yaml");
