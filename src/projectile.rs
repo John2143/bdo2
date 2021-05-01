@@ -1,5 +1,6 @@
 use bevy::prelude::*;
-use rand::Rng;
+
+use crate::config::Config;
 
 fn setup() {}
 
@@ -8,8 +9,8 @@ struct Proj(Vec3, f32);
 fn update(
     mut commands: Commands,
     //time: Res<Time>,
-    //config: Res<crate::config::Config>,
-    //keyboard_input: Res<Input<KeyCode>>,
+    config: Res<Config>,
+    keyboard_input: Res<Input<KeyCode>>,
     mouse_input: Res<Input<MouseButton>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,

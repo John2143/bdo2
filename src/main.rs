@@ -8,6 +8,7 @@ mod networking;
 mod projectile;
 mod ui;
 mod utils;
+mod input;
 
 use utils::RotatableVector;
 
@@ -28,6 +29,7 @@ fn main() {
     config::build(&mut app);
     networking::build(&mut app);
     projectile::build(&mut app);
+    input::build(&mut app);
 
     app.run();
 }
