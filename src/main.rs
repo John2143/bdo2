@@ -5,9 +5,9 @@ use bevy::{input::mouse::MouseMotion, input::mouse::MouseWheel, prelude::*};
 mod camera;
 mod config;
 mod networking;
+mod projectile;
 mod ui;
 mod utils;
-mod projectile;
 
 use utils::RotatableVector;
 
@@ -130,26 +130,30 @@ fn setup_scene(
             material: player_material.clone(),
             ..Default::default()
         })
-        .insert_bundle((CameraOrientation {
-            attached_entity: Some(e),
-            ..Default::default()
-        }, PhysicsProperties {
-            movement_speed_ground: 15.0,
-            movement_speed_air: 1.0,
-            movement_acceleration: 15.0 * 10.0,
-            dash_cooldown: 0.5,
-        }, Physics {
-            gravity_func: |_x, _launchvel| {
-                //let offset = 25.0;
-                //35f32.min((x - 0.5).powf(2.0) + offset)
-
-                30.0
-
-                //35f32.min(15. * x)
+        .insert_bundle((
+            CameraOrientation {
+                attached_entity: Some(e),
+                ..Default::default()
             },
-            last_jump: -100.0,
-            ..Default::default()
-        }))
+            PhysicsProperties {
+                movement_speed_ground: 15.0,
+                movement_speed_air: 1.0,
+                movement_acceleration: 15.0 * 10.0,
+                dash_cooldown: 0.5,
+            },
+            Physics {
+                gravity_func: |_x, _launchvel| {
+                    //let offset = 25.0;
+                    //35f32.min((x - 0.5).powf(2.0) + offset)
+
+                    30.0
+
+                    //35f32.min(15. * x)
+                },
+                last_jump: -100.0,
+                ..Default::default()
+            },
+        ))
         .id();
 
     commands.entity(player).push_children(&[e]);

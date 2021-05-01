@@ -27,10 +27,9 @@ fn setup_debug_info(
     mut c_materials: ResMut<Assets<ColorMaterial>>,
     assets_server: Res<AssetServer>,
 ) {
-    commands
-        .spawn_bundle(UiCameraBundle {
-            ..Default::default()
-        });
+    commands.spawn_bundle(UiCameraBundle {
+        ..Default::default()
+    });
 
     commands
         .spawn_bundle(NodeBundle {
@@ -47,16 +46,14 @@ fn setup_debug_info(
                 .spawn_bundle(TextBundle {
                     text: Text {
                         alignment: TextAlignment::default(),
-                        sections: vec![
-                            TextSection {
-                                value: "Something wrong with debug text monkaS".to_string(),
-                                style: TextStyle {
-                                    font_size: 25.0,
-                                    font: assets_server.load("JetBrainsMono-Regular.ttf"),
-                                    color: Color::RED,
-                                }
-                            }
-                        ],
+                        sections: vec![TextSection {
+                            value: "Something wrong with debug text monkaS".to_string(),
+                            style: TextStyle {
+                                font_size: 25.0,
+                                font: assets_server.load("JetBrainsMono-Regular.ttf"),
+                                color: Color::RED,
+                            },
+                        }],
                     },
                     style: Style {
                         margin: Rect {

@@ -1,9 +1,7 @@
 use bevy::prelude::*;
 use rand::Rng;
 
-fn setup(
-) {
-}
+fn setup() {}
 
 struct Proj(Vec3, f32);
 
@@ -23,15 +21,17 @@ fn update(
             None => return,
         };
 
-        commands.spawn_bundle(PbrBundle {
-            mesh: meshes.add(Mesh::from(shape::Cube { size: 0.2 })),
-            material: materials.add(Color::PURPLE.into()),
-            transform: Transform {
-                translation: pos.translation + Vec3::Y * 2.0,
+        commands
+            .spawn_bundle(PbrBundle {
+                mesh: meshes.add(Mesh::from(shape::Cube { size: 0.2 })),
+                material: materials.add(Color::PURPLE.into()),
+                transform: Transform {
+                    translation: pos.translation + Vec3::Y * 2.0,
+                    ..Default::default()
+                },
                 ..Default::default()
-            },
-            ..Default::default()
-        }).insert(Proj(orientation.xy_vector() * 100.0, 5.0));
+            })
+            .insert(Proj(orientation.xy_vector() * 100.0, 5.0));
     }
 }
 
@@ -49,59 +49,11 @@ fn move_proj(
     }
 }
 
-struct TestTimer(Timer);
-struct Food;
-
-fn test(
-    mut commands: Commands,
-    time: Res<Time>,
-    mut timer: ResMut<TestTimer>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    assets_server: Res<AssetServer>,
-    mut players: Query<(Entity, &Transform, &mut crate::Physics)>,
-    foods: Query<(Entity, &Transform, &Food)>,
-) {
-    timer.0.tick(time.delta());
-    if timer.0.finished() {
-        let player_mesh = assets_server.load("cube.gltf#Mesh0/Primitive0");
-        let r = rand::thread_rng().gen_range(-20.0..20.0);
-        //let r = 20.0;
-
-        commands
-        .spawn_bundle(PbrBundle {
-            mesh: player_mesh,
-            material: materials.add(Color::ORANGE_RED.into()),
-            transform: Transform {
-                translation: Vec3::new(r, 0.0, 0.0),
-                ..Default::default()
-            },
-            ..Default::default()
-        })
-        .insert(Food);
-    }
-
-    let trans_plr = match players.iter_mut().next() {
-        Some((_, e, _)) => e,
-        None => return,
-    };
-
-    for (ent_food, trans_food, _) in foods.iter() {
-        if trans_food.translation.distance(trans_plr.translation) < 1.0 {
-            info!("ate food");
-
-            commands.entity(ent_food).despawn_recursive();
-        }
-    }
-}
-
 pub fn build(app: &mut AppBuilder) {
     app
         //.init_resource::<>()
         //.add_resource(NetworkingTimer(Timer::from_seconds(1.0 / 120.0, true)))
         .add_startup_system(setup.system())
         .add_system(update.system())
-        .add_system(move_proj.system())
-        .insert_resource(TestTimer(Timer::from_seconds(2.0, true)))
-        .add_system(test.system());
+        .add_system(move_proj.system());
 }
