@@ -166,6 +166,11 @@ fn setup_scene(
                 translation: Vec3::new(*x, 50.0, *y),
                 ..Default::default()
             },
+            light: Light {
+                intensity: 1000.0,
+                range: 100.0,
+                ..Default::default()
+            },
             ..Default::default()
         });
     }
@@ -208,7 +213,7 @@ fn setup_window(mut windows: ResMut<Windows>) {
     window.set_cursor_lock_mode(true);
     window.set_cursor_visibility(false);
     window.set_title("9.99$ game btw".into());
-    window.set_vsync(true);
+    window.set_vsync(false);
 }
 
 fn system_window(

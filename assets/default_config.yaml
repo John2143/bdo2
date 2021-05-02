@@ -3,7 +3,8 @@ sens: .5
 zoom_sens: 3.0
 
 movement: [W, A, S, D]
+specials: [E, F]
 jump: Space
 dash: LShift
 
-host_mode: false
+host_mode:

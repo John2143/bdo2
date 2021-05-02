@@ -17,6 +17,8 @@ pub struct Config {
 
     ///up, left, down, right
     pub movement: [KeyCode; 4],
+    ///E, F
+    pub specials: [KeyCode; 2],
     pub jump: KeyCode,
     pub dash: KeyCode,
 

@@ -3,42 +3,6 @@ use bevy::prelude::*;
 use crate::config::Config;
 use std::hash::Hash;
 
-enum InputState {
-    Unpressed,
-    JustPressed,
-    JustReleased,
-    Held,
-}
-
-struct InputMatrix {
-    back: InputState,
-    forward: InputState,
-    left: InputState,
-    right: InputState,
-
-    click: InputState,
-}
-
-fn input_matrix(c: &Config, key_in: &Input<KeyCode>, mouse_in: &Input<MouseButton>) -> InputMatrix {
-    fn do_match<T: Copy + Eq + Hash>(i: &Input<T>, k: T) -> InputState {
-        use InputState::*;
-        match (i.just_pressed(k), i.just_released(k), i.pressed(k)) {
-            (true, _, _) => JustPressed,
-            (_, true, _) => JustReleased,
-            (_, _, true) => Held,
-            (_, _, _) => Unpressed,
-        }
-    }
-
-    InputMatrix {
-        back: do_match(&key_in, c.movement[2]),
-        forward: do_match(&key_in, c.movement[0]),
-        left: do_match(&key_in, c.movement[1]),
-        right: do_match(&key_in, c.movement[3]),
-        click: do_match(&mouse_in, MouseButton::Left),
-    }
-}
-
 #[macro_export]
 macro_rules! keys_basic {
     ($matrix: expr => $( $key: ident is $( $state: pat )|+ ),+) => {
@@ -87,8 +51,61 @@ macro_rules! keys {
     };
 }
 
-fn send_event(event: &str) {
-    info!("event! {}", event);
+#[derive(Debug)]
+#[allow(dead_code)]
+pub enum InputEvent {
+    LRClick,
+    BClick,
+    FClick,
+    FSpec1,
+}
+
+pub enum InputState {
+    Unpressed,
+    JustPressed,
+    JustReleased,
+    Held,
+}
+
+pub struct InputMatrix {
+    pub back: InputState,
+    pub forward: InputState,
+    pub left: InputState,
+    pub right: InputState,
+    pub dash: InputState,
+
+    pub spec1: InputState,
+    pub spec2: InputState,
+    pub click: InputState,
+}
+
+pub fn input_matrix(
+    c: &Config,
+    key_in: &Input<KeyCode>,
+    mouse_in: &Input<MouseButton>,
+) -> InputMatrix {
+    fn do_match<T: Copy + Eq + Hash>(i: &Input<T>, k: T) -> InputState {
+        use InputState::*;
+        match (i.just_pressed(k), i.just_released(k), i.pressed(k)) {
+            (true, _, _) => JustPressed,
+            (_, true, _) => JustReleased,
+            (_, _, true) => Held,
+            (_, _, _) => Unpressed,
+        }
+    }
+
+    InputMatrix {
+        back: do_match(&key_in, c.movement[2]),
+        forward: do_match(&key_in, c.movement[0]),
+        left: do_match(&key_in, c.movement[1]),
+        right: do_match(&key_in, c.movement[3]),
+        dash: do_match(&key_in, c.dash),
+
+        spec1: do_match(&key_in, c.specials[0]),
+        spec2: do_match(&key_in, c.specials[1]),
+
+        click: do_match(&mouse_in, MouseButton::Left),
+    }
 }
 
 fn update(
@@ -97,6 +114,8 @@ fn update(
     config: Res<Config>,
     keyboard_input: Res<Input<KeyCode>>,
     mouse_input: Res<Input<MouseButton>>,
+
+    mut input_events: EventWriter<InputEvent>,
     //mut meshes: ResMut<Assets<Mesh>>,
     //mut materials: ResMut<Assets<StandardMaterial>>,
     //mut player_query: Query<(&crate::CameraOrientation, &Transform)>,
@@ -107,12 +126,22 @@ fn update(
         click is JustPressed,
         left | right is Held | JustPressed,
     ) {
-        send_event("l/r shoot");
+        input_events.send(InputEvent::LRClick);
     } else if keys!(key_matrix =>
         click is JustPressed,
         back is Held | JustPressed,
     ) {
-        send_event("back shoot");
+        input_events.send(InputEvent::BClick);
+    } else if keys!(key_matrix =>
+        dash is JustPressed,
+        forward is Held,
+    ) {
+
+    } else if keys!(key_matrix =>
+        spec1 is JustPressed,
+        forward is Held | JustPressed,
+    ) {
+        input_events.send(InputEvent::FSpec1);
     }
 }
 
@@ -123,5 +152,6 @@ pub fn build(app: &mut AppBuilder) {
         //.init_resource::<>()
         //.add_resource(NetworkingTimer(Timer::from_seconds(1.0 / 120.0, true)))
         .add_startup_system(setup.system())
-        .add_system(update.system());
+        .add_system(update.system())
+        .add_event::<InputEvent>();
 }

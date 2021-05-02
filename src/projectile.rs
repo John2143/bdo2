@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::config::Config;
+use crate::input::InputEvent;
 
 fn setup() {}
 
@@ -9,30 +9,31 @@ struct Proj(Vec3, f32);
 fn update(
     mut commands: Commands,
     //time: Res<Time>,
-    config: Res<Config>,
-    keyboard_input: Res<Input<KeyCode>>,
-    mouse_input: Res<Input<MouseButton>>,
+    mut inputs: EventReader<InputEvent>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut player_query: Query<(&crate::CameraOrientation, &Transform)>,
+    player_query: Query<(&crate::CameraOrientation, &Transform)>,
 ) {
-    if mouse_input.pressed(MouseButton::Left) {
-        let (orientation, pos) = match player_query.iter_mut().next() {
-            Some(p) => p,
-            None => return,
-        };
+    for input in inputs.iter() {
+        info!("{:?}", input);
+        if let InputEvent::LRClick | InputEvent::BClick = input {
+            let (orientation, pos) = match player_query.iter().next() {
+                Some(p) => p,
+                None => return,
+            };
 
-        commands
-            .spawn_bundle(PbrBundle {
-                mesh: meshes.add(Mesh::from(shape::Cube { size: 0.2 })),
-                material: materials.add(Color::PURPLE.into()),
-                transform: Transform {
-                    translation: pos.translation + Vec3::Y * 2.0,
+            commands
+                .spawn_bundle(PbrBundle {
+                    mesh: meshes.add(Mesh::from(shape::Cube { size: 0.2 })),
+                    material: materials.add(Color::PURPLE.into()),
+                    transform: Transform {
+                        translation: pos.translation + Vec3::Y * 2.0,
+                        ..Default::default()
+                    },
                     ..Default::default()
-                },
-                ..Default::default()
-            })
-            .insert(Proj(orientation.xy_vector() * 100.0, 5.0));
+                })
+                .insert(Proj(orientation.xy_vector() * 100.0, 5.0));
+        }
     }
 }
 
