@@ -9,13 +9,14 @@ mod projectile;
 mod ui;
 mod utils;
 mod input;
+mod enemy;
 
 use utils::RotatableVector;
 
 fn main() {
     let mut app = App::build();
 
-    app.insert_resource(Msaa { samples: 4 })
+    app.insert_resource(Msaa { samples: 8 })
         .add_plugins(DefaultPlugins)
         .init_resource::<MouseInputState>()
         .add_startup_system(setup_scene.system())
@@ -30,6 +31,7 @@ fn main() {
     networking::build(&mut app);
     projectile::build(&mut app);
     input::build(&mut app);
+    enemy::build(&mut app);
 
     app.run();
 }

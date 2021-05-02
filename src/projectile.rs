@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::input::InputEvent;
+use crate::{enemy::Enemy, input::InputEvent};
 
 fn setup() {}
 
@@ -40,13 +40,26 @@ fn update(
 fn move_proj(
     mut commands: Commands,
     time: Res<Time>,
-    mut projs: Query<(Entity, &mut Proj, &mut Transform)>,
+    mut qs: QuerySet<(
+        Query<(Entity, &mut Proj, &mut Transform)>,
+        Query<(Entity, &Proj, &Transform)>,
+        Query<(Entity, &Enemy, &Transform)>,
+    )>,
+
 ) {
-    for (id, mut proj_data, mut transform) in projs.iter_mut() {
+    for (id, mut proj_data, mut transform) in qs.q0_mut().iter_mut() {
         transform.translation += time.delta_seconds() * proj_data.0;
         proj_data.1 -= time.delta_seconds();
         if proj_data.1 <= 0.0 {
             commands.entity(id).despawn_recursive();
+        }
+    }
+
+    for (_, _, transform) in qs.q1().iter() {
+        for (ent, _, enemy_trans) in qs.q2().iter() {
+            if enemy_trans.translation.distance(transform.translation) < 4.0 {
+                commands.entity(ent).despawn_recursive();
+            }
         }
     }
 }
