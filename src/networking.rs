@@ -1,5 +1,6 @@
 #![allow(dead_code, unused_variables, unused_mut)]
 use bevy::prelude::*;
+use message_io::{network::{NetEvent, Transport}, node::{self, NodeEvent}};
 use std::thread;
 use std::{
     io::{Read, Write},
@@ -11,8 +12,6 @@ use std::{
 
 use serde::Deserialize;
 use serde::Serialize;
-
-use crate::config::NetMode;
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 enum NetworkingAction {
@@ -40,34 +39,10 @@ fn setup_networking(
     config: Res<crate::config::Config>,
     assets_server: Res<AssetServer>,
 ) {
-    let host_mode = match config.net_mode {
-        Some(NetMode::Host) => true,
-        Some(NetMode::Client) => false,
-        None => return,
-    };
-
     let (inc, out) = (netqueues.incoming.clone(), netqueues.outgoing.clone());
     let jh = thread::spawn(move || {
-        if host_mode {
-            start_host(inc, out)
-        } else {
-            start_player(inc, out)
-        }
+        start_player(inc, out)
     });
-
-    let player_mesh = assets_server.load("cube.gltf#Mesh0/Primitive0");
-
-    commands
-        .spawn_bundle(PbrBundle {
-            mesh: player_mesh,
-            material: materials.add(Color::GREEN.into()),
-            transform: Transform {
-                translation: Vec3::new(0.0, 0.0, 0.0),
-                ..Default::default()
-            },
-            ..Default::default()
-        })
-        .insert(NetworkEnt);
 }
 
 fn handle_incoming(mut person: TcpStream, inc: NetworkQueue) {
@@ -110,39 +85,48 @@ fn handle_outgoing(mut stream: TcpStream, out: NetworkQueue) {
     }
 }
 
-fn start_host(inc: NetworkQueue, out: NetworkQueue) {
-    thread::spawn(move || {
-        let reader = TcpListener::bind("0.0.0.0:8878").expect("couldn't start server D:");
-        for stream in reader.incoming() {
-            let mut person = stream.unwrap();
-            person.set_read_timeout(None).unwrap();
-
-            let inc = inc.clone();
-            thread::spawn(move || handle_incoming(person, inc));
-        }
-    });
-
-    thread::spawn(move || {
-        let writer = TcpListener::bind("0.0.0.0:8879").expect("couldn't start server D:");
-        for stream in writer.incoming() {
-            let mut person = stream.unwrap();
-            person.set_write_timeout(None).unwrap();
-
-            let out = out.clone();
-            thread::spawn(move || handle_outgoing(person, out));
-        }
-    });
-}
-
 fn start_player(inc: NetworkQueue, out: NetworkQueue) {
-    let mut stream_in = TcpStream::connect("john2143.com:8879").unwrap();
-    let mut stream_out = TcpStream::connect("john2143.com:8878").unwrap();
+    info!("starting player");
+    let (handler, listener) = node::split::<()>();
 
-    thread::spawn(move || {
-        handle_outgoing(stream_out, out);
+    let (server, _) = handler
+        .network()
+        .connect(Transport::Udp, "172.18.97.249:7777")
+        .unwrap();
+
+    info!("probably connected");
+
+    handler.network().send(server, "hello".as_bytes());
+    let h2 = handler.clone();
+
+    let mut i = 0;
+    std::thread::spawn(move || {
+        loop {
+            h2.signals().send(());
+            info!("sending");
+            i += 1;
+            h2.network().send(server, format!("heartbeat {}", i).as_bytes());
+            std::thread::sleep(Duration::from_millis(100));
+        }
     });
-    thread::spawn(move || {
-        handle_incoming(stream_in, inc);
+
+    listener.for_each(move |event| {
+        match event {
+            NodeEvent::Signal(_s) => {
+                info!("signal...");
+            },
+            NodeEvent::Network(net_event) => match net_event {
+                NetEvent::Message(endpoint, _data) => {
+                    //i += 1;
+                    //handler.network().send(server, &['b' as u8; 1200]);
+                    println!("got some data", );
+                }
+                NetEvent::Disconnected(_) => {
+                    println!("disconnected from server",);
+                }
+                _ => {}
+            },
+        }
     });
 }
 
