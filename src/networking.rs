@@ -17,7 +17,6 @@ use serde::Serialize;
 enum NetworkingAction {
     Print(String),
     Location(Quat, Vec3),
-    Done,
 }
 
 type NetworkQueue = Arc<Mutex<Vec<NetworkingAction>>>;
@@ -43,6 +42,7 @@ fn setup_networking(
     let jh = thread::spawn(move || {
         start_player(inc, out)
     });
+    netqueues.setup = true;
 }
 
 fn handle_incoming(mut person: TcpStream, inc: NetworkQueue) {
@@ -73,15 +73,6 @@ fn handle_incoming(mut person: TcpStream, inc: NetworkQueue) {
 
 fn handle_outgoing(mut stream: TcpStream, out: NetworkQueue) {
     loop {
-        //empty the outs queue because we're using it now
-        let outs = std::mem::replace(&mut *out.lock().unwrap(), Vec::new());
-
-        for action in outs {
-            let message = serde_json::to_vec(&action).unwrap();
-
-            stream.write(&message).unwrap();
-            stream.write("\n".as_bytes()).unwrap();
-        }
     }
 }
 
@@ -91,7 +82,7 @@ fn start_player(inc: NetworkQueue, out: NetworkQueue) {
 
     let (server, _) = handler
         .network()
-        .connect(Transport::Udp, "172.18.97.249:7777")
+        .connect(Transport::Tcp, "172.18.97.249:7777")
         .unwrap();
 
     info!("probably connected");
@@ -102,11 +93,19 @@ fn start_player(inc: NetworkQueue, out: NetworkQueue) {
     let mut i = 0;
     std::thread::spawn(move || {
         loop {
-            h2.signals().send(());
-            info!("sending");
             i += 1;
-            h2.network().send(server, format!("heartbeat {}", i).as_bytes());
-            std::thread::sleep(Duration::from_millis(100));
+            h2.network().send(server, format!("packet group {}...", i).as_bytes());
+
+            //empty the outs queue because we're using it now
+            let outs = std::mem::replace(&mut *out.lock().unwrap(), Vec::new());
+
+            for action in outs {
+                let message = serde_json::to_vec(&action).unwrap();
+
+                h2.network().send(server, &*message);
+            }
+
+            std::thread::sleep(Duration::from_millis((1000.0f32 / 128.0).floor() as u64));
         }
     });
 
@@ -119,10 +118,10 @@ fn start_player(inc: NetworkQueue, out: NetworkQueue) {
                 NetEvent::Message(endpoint, _data) => {
                     //i += 1;
                     //handler.network().send(server, &['b' as u8; 1200]);
-                    println!("got some data", );
+                    //println!("got some data", );
                 }
                 NetEvent::Disconnected(_) => {
-                    println!("disconnected from server",);
+                    info!("disconnected from server",);
                 }
                 _ => {}
             },
@@ -153,7 +152,7 @@ fn system_update_networking(
     }
 
     for (_, mut transform) in player_query.q0().iter() {
-        if let Ok(mut out) = nets.outgoing.lock() {
+        if let Ok(mut out) = nets.outgoing.try_lock() {
             if out.len() < 3 {
                 out.push(NetworkingAction::Location(
                     transform.rotation,
@@ -164,7 +163,7 @@ fn system_update_networking(
     }
 
     for (_, mut transform) in player_query.q1_mut().iter_mut() {
-        let ins = std::mem::replace(&mut *nets.incoming.lock().unwrap(), Vec::new());
+        let ins = std::mem::replace(&mut *nets.incoming.try_lock().unwrap(), Vec::new());
         for item in ins.iter() {
             match item {
                 NetworkingAction::Print(s) => {
