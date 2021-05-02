@@ -1,6 +1,9 @@
 #![allow(dead_code, unused_variables, unused_mut)]
 use bevy::prelude::*;
-use message_io::{network::{NetEvent, Transport}, node::{self, NodeEvent}};
+use message_io::{
+    network::{NetEvent, Transport},
+    node::{self, NodeEvent},
+};
 use std::thread;
 use std::{
     io::{Read, Write},
@@ -39,9 +42,7 @@ fn setup_networking(
     assets_server: Res<AssetServer>,
 ) {
     let (inc, out) = (netqueues.incoming.clone(), netqueues.outgoing.clone());
-    let jh = thread::spawn(move || {
-        start_player(inc, out)
-    });
+    let jh = thread::spawn(move || start_player(inc, out));
     netqueues.setup = true;
 }
 
@@ -72,18 +73,20 @@ fn handle_incoming(mut person: TcpStream, inc: NetworkQueue) {
 }
 
 fn handle_outgoing(mut stream: TcpStream, out: NetworkQueue) {
-    loop {
-    }
+    loop {}
 }
 
 fn start_player(inc: NetworkQueue, out: NetworkQueue) {
     info!("starting player");
     let (handler, listener) = node::split::<()>();
 
-    let (server, _) = handler
+    let (server, _) = match handler
         .network()
         .connect(Transport::Tcp, "172.18.97.249:7777")
-        .unwrap();
+    {
+        Ok(d) => d,
+        Err(_) => return info!("failed to connect to active server",),
+    };
 
     info!("probably connected");
 
@@ -94,7 +97,8 @@ fn start_player(inc: NetworkQueue, out: NetworkQueue) {
     std::thread::spawn(move || {
         loop {
             i += 1;
-            h2.network().send(server, format!("packet group {}...", i).as_bytes());
+            h2.network()
+                .send(server, format!("packet group {}...", i).as_bytes());
 
             //empty the outs queue because we're using it now
             let outs = std::mem::replace(&mut *out.lock().unwrap(), Vec::new());
@@ -113,7 +117,7 @@ fn start_player(inc: NetworkQueue, out: NetworkQueue) {
         match event {
             NodeEvent::Signal(_s) => {
                 info!("signal...");
-            },
+            }
             NodeEvent::Network(net_event) => match net_event {
                 NetEvent::Message(endpoint, _data) => {
                     //i += 1;
@@ -173,7 +177,6 @@ fn system_update_networking(
                     transform.rotation = *rot;
                     transform.translation = *tran;
                 }
-                NetworkingAction::Done => {}
             }
         }
     }
