@@ -5,22 +5,9 @@ use message_io::{
     node::{self, NodeEvent},
 };
 use std::thread;
-use std::{
-    io::{Read, Write},
-    net::{TcpListener, TcpStream},
-    sync::Arc,
-    sync::Mutex,
-    time::Duration,
-};
+use std::{io::Read, net::TcpStream, sync::Arc, sync::Mutex, time::Duration};
 
-use serde::Deserialize;
-use serde::Serialize;
-
-#[derive(Deserialize, Serialize, Clone, Debug)]
-enum NetworkingAction {
-    Print(String),
-    Location(Quat, Vec3),
-}
+use shared::NetworkingAction;
 
 type NetworkQueue = Arc<Mutex<Vec<NetworkingAction>>>;
 
@@ -80,10 +67,7 @@ fn start_player(inc: NetworkQueue, out: NetworkQueue) {
     info!("starting player");
     let (handler, listener) = node::split::<()>();
 
-    let (server, _) = match handler
-        .network()
-        .connect(Transport::Tcp, "172.18.97.249:7777")
-    {
+    let (server, _) = match handler.network().connect(Transport::Tcp, "127.0.0.1:7777") {
         Ok(d) => d,
         Err(_) => return info!("failed to connect to active server",),
     };
@@ -97,8 +81,10 @@ fn start_player(inc: NetworkQueue, out: NetworkQueue) {
     std::thread::spawn(move || {
         loop {
             i += 1;
-            h2.network()
-                .send(server, format!("packet group {}...", i).as_bytes());
+            h2.network().send(
+                server,
+                &serde_json::to_vec(&NetworkingAction::Heartbeat).unwrap(),
+            );
 
             //empty the outs queue because we're using it now
             let outs = std::mem::replace(&mut *out.lock().unwrap(), Vec::new());
@@ -176,6 +162,9 @@ fn system_update_networking(
                 NetworkingAction::Location(rot, tran) => {
                     transform.rotation = *rot;
                     transform.translation = *tran;
+                }
+                NetworkingAction::Heartbeat => {
+                    info!("heartbeat");
                 }
             }
         }

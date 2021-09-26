@@ -1,9 +1,21 @@
 use bevy::prelude::*;
-use rand::{random, thread_rng, Rng};
+use rand::{thread_rng, Rng};
+
+pub struct Enemy {
+    pub facing: f32,
+    pub facing_vel: f32,
+}
+
+impl Default for Enemy {
+    fn default() -> Self {
+        Self {
+            facing: 0.0,
+            facing_vel: 0.0,
+        }
+    }
+}
 
 //use crate::{config::Config, input::InputEvent};
-
-pub struct Enemy(f32, f32);
 
 fn update(
     mut commands: Commands,
@@ -32,15 +44,15 @@ fn update(
                 //material: player_material.clone(),
                 ..Default::default()
             })
-            .insert(Enemy(0.0, 0.0));
+            .insert(Enemy::default());
     }
 
     for (_, mut enemy, mut trans) in enemy_query.iter_mut() {
-        trans.rotation = Quat::from_rotation_y(enemy.0);
-        enemy.0 += 1.0 * time.delta_seconds() * enemy.1;
-        enemy.1 += 1.0 * time.delta_seconds() * thread_rng().gen_range(-1.0..1.0);
+        trans.rotation = Quat::from_rotation_y(enemy.facing);
+        enemy.facing += 1.0 * time.delta_seconds() * enemy.facing_vel;
+        enemy.facing_vel += 1.0 * time.delta_seconds() * thread_rng().gen_range(-1.0..1.0);
 
-        let (x, z) = enemy.0.sin_cos();
+        let (x, z) = enemy.facing.sin_cos();
 
         trans.translation += Vec3::new(x, 0.0, z) * time.delta_seconds() * 20.0;
     }

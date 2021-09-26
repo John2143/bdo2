@@ -1,16 +1,16 @@
-#![feature(cow_is_borrowed)]
-
 use bevy::{input::mouse::MouseMotion, input::mouse::MouseWheel, prelude::*};
+//use bevy_egui::{egui, EguiContext, EguiPlugin};
 
 mod camera;
 mod config;
+mod enemy;
+mod input;
 mod networking;
 mod projectile;
 mod ui;
 mod utils;
-mod input;
-mod enemy;
 
+use shared::{Physics, PhysicsProperties};
 use utils::RotatableVector;
 
 fn main() {
@@ -18,6 +18,7 @@ fn main() {
 
     app.insert_resource(Msaa { samples: 8 })
         .add_plugins(DefaultPlugins)
+        //.add_plugin(EguiPlugin)
         .init_resource::<MouseInputState>()
         .add_startup_system(setup_scene.system())
         .add_startup_system(setup_window.system())
@@ -71,35 +72,6 @@ impl Default for CameraOrientation {
             distance: 50.,
             y_offset: 5.0,
             attached_entity: None,
-        }
-    }
-}
-
-struct PhysicsProperties {
-    movement_speed_ground: f32,
-    movement_speed_air: f32,
-    movement_acceleration: f32,
-    dash_cooldown: f64,
-}
-
-struct Physics {
-    gravity_func: fn(f32, f32) -> f32,
-    velocity: Vec3,
-    walking_velocity: Vec2,
-    dash_velocity: Vec3,
-    last_jump: f64,
-    last_dash: f64,
-}
-
-impl Default for Physics {
-    fn default() -> Self {
-        Self {
-            gravity_func: |_, _| 9.8,
-            velocity: Vec3::ZERO,
-            walking_velocity: Vec2::ZERO,
-            last_jump: 0.0,
-            last_dash: 0.0,
-            dash_velocity: Vec3::ZERO,
         }
     }
 }
@@ -243,7 +215,11 @@ fn system_mouse(
     mut mouse_wheel: EventReader<MouseWheel>,
     mut query: Query<&mut CameraOrientation>,
 ) {
-    let mut camera = query.iter_mut().next().unwrap();
+    let mut camera = match query.iter_mut().next() {
+        Some(cam) => cam,
+        None => return,
+    };
+
     let mut look = Vec2::ZERO;
     for event in mouse_motion.iter() {
         look += event.delta;

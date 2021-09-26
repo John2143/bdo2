@@ -1,2 +1,7 @@
-/target
+**/target
 client/config.yaml
+
+
+# Added by cargo
+
+/target
