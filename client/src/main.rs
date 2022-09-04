@@ -14,18 +14,18 @@ use shared::{Physics, PhysicsProperties};
 use utils::RotatableVector;
 
 fn main() {
-    let mut app = App::build();
+    let mut app = App::new();
 
     app.insert_resource(Msaa { samples: 8 })
         .add_plugins(DefaultPlugins)
         //.add_plugin(EguiPlugin)
         .init_resource::<MouseInputState>()
-        .add_startup_system(setup_scene.system())
-        .add_startup_system(setup_window.system())
-        .add_system(system_update_player_cam.system())
-        .add_system(system_update_movement.system())
-        .add_system(system_window.system())
-        .add_system(system_mouse.system());
+        .add_startup_system(setup_scene)
+        .add_startup_system(setup_window)
+        .add_system(system_update_player_cam)
+        .add_system(system_update_movement)
+        .add_system(system_window)
+        .add_system(system_mouse);
 
     ui::build(&mut app);
     config::build(&mut app);
@@ -39,6 +39,7 @@ fn main() {
 
 ///based on Bevy-WoW camera
 ///angles are in radians
+#[derive(Component)]
 struct CameraOrientation {
     yaw: f32,
     ///0 = straight up vector (looking directly down at the ground)
@@ -77,6 +78,7 @@ impl Default for CameraOrientation {
 }
 
 //marker trait attached to the spawned camera indicating that our ent probably needs to control it
+#[derive(Component)]
 struct PlayerCamera;
 
 /// set up a simple 3D scene
@@ -90,7 +92,7 @@ fn setup_scene(
 
     // add entities to the world
     let e = commands
-        .spawn_bundle(PerspectiveCameraBundle::default())
+        .spawn_bundle(Camera3dBundle::default())
         .insert(PlayerCamera)
         .id();
 
@@ -135,12 +137,12 @@ fn setup_scene(
     commands.entity(player).push_children(&[e]);
 
     for (x, y) in &[(5.0, 5.0), (-5.0, 5.0), (5.0, -5.0), (-5.0, -5.0)] {
-        commands.spawn_bundle(LightBundle {
+        commands.spawn_bundle(PointLightBundle {
             transform: Transform {
                 translation: Vec3::new(*x, 50.0, *y),
                 ..Default::default()
             },
-            light: Light {
+            point_light: PointLight {
                 intensity: 1000.0,
                 range: 100.0,
                 ..Default::default()
@@ -187,7 +189,7 @@ fn setup_window(mut windows: ResMut<Windows>) {
     window.set_cursor_lock_mode(true);
     window.set_cursor_visibility(false);
     window.set_title("9.99$ game btw".into());
-    window.set_vsync(false);
+    //window.set_present_mode(bevy::window::PresentMode::AutoNoVsync);
 }
 
 fn system_window(
@@ -204,7 +206,12 @@ fn system_window(
     if keyboard_input.just_pressed(KeyCode::End) {
         info!("Vsync");
         let window = windows.get_primary_mut().unwrap();
-        window.set_vsync(!window.vsync());
+        use bevy::window::PresentMode;
+        if window.present_mode() == PresentMode::AutoVsync {
+            window.set_present_mode(bevy::window::PresentMode::AutoNoVsync);
+        } else {
+            window.set_present_mode(bevy::window::PresentMode::AutoVsync);
+        }
     }
 }
 
@@ -251,7 +258,7 @@ fn system_mouse(
 fn system_update_movement(
     time: Res<Time>,
     keyboard_input: Res<Input<KeyCode>>,
-    mut ui_debug: ResMut<ui::UIDebugInfo>,
+    //mut ui_debug: ResMut<ui::UIDebugInfo>,
     config: Res<config::Config>,
     mut player_query: Query<(
         &CameraOrientation,
@@ -283,12 +290,13 @@ fn system_update_movement(
     }
 
     if movement2d_direction != Vec2::ZERO {
-        movement2d_direction.normalize();
+        movement2d_direction = movement2d_direction.normalize();
     }
 
     use utils::Vec2toVec3;
 
-    let movement2d_direction = movement2d_direction.rotate(player_cam.yaw - 90.0f32.to_radians());
+    let movement2d_direction =
+        movement2d_direction.rotate_ang(player_cam.yaw - 90.0f32.to_radians());
 
     let is_in_air = if player_transform.translation.y <= 0.0 {
         false
@@ -357,9 +365,9 @@ fn system_update_movement(
 
     phys.dash_velocity = movement2d_direction.xz3() * dash_falloff_func(dash_percent as f32) * 50.0;
 
-    ui_debug.speed = phys.walking_velocity.length() + phys.dash_velocity.length();
-    ui_debug.updates += 1;
-    ui_debug.fr = 1.0 / time.delta_seconds_f64();
+    //ui_debug.speed = phys.walking_velocity.length() + phys.dash_velocity.length();
+    //ui_debug.updates += 1;
+    //ui_debug.fr = 1.0 / time.delta_seconds_f64();
 
     player_transform.translation +=
         (phys.velocity + phys.walking_velocity.xz3() + phys.dash_velocity) * time.delta_seconds();
@@ -377,14 +385,15 @@ fn system_update_movement(
 }
 
 fn system_update_player_cam(
-    mut transforms: QuerySet<(
+    mut transforms: ParamSet<(
         Query<(&CameraOrientation, &mut Transform)>,
         Query<(&PlayerCamera, Entity, &mut Transform)>,
     )>,
 ) {
     let mut o_player_cam = None;
 
-    for (player_cam, mut player_transform) in transforms.q0_mut().iter_mut() {
+    let mut binding = transforms.p0();
+    for (player_cam, mut player_transform) in binding.iter_mut() {
         //player.yaw = remap(
         //(time.seconds_since_startup * 0.3).cos(),
         //(-1.0, 1.0),
@@ -402,12 +411,12 @@ fn system_update_player_cam(
         let (pitch_sin, pitch_cos) = player_cam.pitch.sin_cos();
         let cam_pos =
             Vec3::new(0., pitch_cos, pitch_sin).normalize() * player_cam.distance + cam_offset;
-        for (_, e, mut camera3dtrans) in transforms.q1_mut().iter_mut() {
+        for (_, e, mut camera3dtrans) in transforms.p1().iter_mut() {
             if Some(e) != camera_entity {
                 continue;
             }
             camera3dtrans.translation = cam_pos;
-            let look = Mat4::face_toward(cam_pos, cam_offset, Vec3::new(0.0, 1.0, 0.0));
+            let look = Mat4::look_at_rh(cam_pos, cam_offset, Vec3::new(0.0, 1.0, 0.0));
             camera3dtrans.rotation = look.to_scale_rotation_translation().1;
         }
     }

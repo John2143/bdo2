@@ -20,17 +20,10 @@ impl std::fmt::Display for UIDebugInfo {
 }
 
 ///Component for Debug UI Text
+#[derive(Component)]
 struct UIDebugMarker;
 
-fn setup_debug_info(
-    mut commands: Commands,
-    mut c_materials: ResMut<Assets<ColorMaterial>>,
-    assets_server: Res<AssetServer>,
-) {
-    commands.spawn_bundle(UiCameraBundle {
-        ..Default::default()
-    });
-
+fn setup_debug_info(mut commands: Commands, assets_server: Res<AssetServer>) {
     commands
         .spawn_bundle(NodeBundle {
             style: Style {
@@ -38,7 +31,6 @@ fn setup_debug_info(
                 size: Size::new(Val::Auto, Val::Auto),
                 ..Default::default()
             },
-            material: c_materials.add(Color::NONE.into()),
             ..Default::default()
         })
         .with_children(|thing| {
@@ -56,7 +48,7 @@ fn setup_debug_info(
                         }],
                     },
                     style: Style {
-                        margin: Rect {
+                        margin: UiRect {
                             bottom: Val::Px(64.0),
                             ..Default::default()
                         },
@@ -78,8 +70,8 @@ fn system_update_debug_info(info: Res<UIDebugInfo>, mut text: Query<(&mut Text, 
     }
 }
 
-pub fn build(app: &mut AppBuilder) {
+pub fn build(app: &mut App) {
     app.init_resource::<UIDebugInfo>()
-        .add_startup_system(setup_debug_info.system())
-        .add_system(system_update_debug_info.system());
+        .add_startup_system(setup_debug_info)
+        .add_system(system_update_debug_info);
 }

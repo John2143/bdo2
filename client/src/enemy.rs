@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use rand::{thread_rng, Rng};
 
+#[derive(Component)]
 pub struct Enemy {
     pub facing: f32,
     pub facing_vel: f32,
@@ -62,10 +63,10 @@ fn setup() {}
 
 struct EnemySpawnTimer(Timer);
 
-pub fn build(app: &mut AppBuilder) {
+pub fn build(app: &mut App) {
     app
         //.init_resource::<>()
         .insert_resource(EnemySpawnTimer(Timer::from_seconds(2.0, true)))
-        .add_startup_system(setup.system())
-        .add_system(update.system());
+        .add_startup_system(setup)
+        .add_system(update);
 }

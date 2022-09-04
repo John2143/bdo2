@@ -28,12 +28,12 @@ where
 ///This trait represents a vector that can be rotated around its origin by
 ///some amount theta
 pub trait RotatableVector<RotateInput> {
-    fn rotate(self, theta: RotateInput) -> Self;
+    fn rotate_ang(self, theta: RotateInput) -> Self;
 }
 
 ///Rotates around origin counter clockwise
 impl RotatableVector<f32> for Vec2 {
-    fn rotate(self, theta: f32) -> Self {
+    fn rotate_ang(self, theta: f32) -> Self {
         let ang = self.x.atan2(self.y);
         let ang = (ang + theta).sin_cos();
         Vec2::new(ang.1, ang.0) * self.length()
@@ -41,13 +41,13 @@ impl RotatableVector<f32> for Vec2 {
 }
 
 impl RotatableVector<(f32, f32)> for Vec3 {
-    fn rotate(self, (_, _): (f32, f32)) -> Self {
+    fn rotate_ang(self, (_, _): (f32, f32)) -> Self {
         todo!()
     }
 }
 
 impl RotatableVector<Quat> for Vec3 {
-    fn rotate(self, _quat: Quat) -> Self {
+    fn rotate_ang(self, _quat: Quat) -> Self {
         todo!()
     }
 }

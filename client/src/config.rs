@@ -65,7 +65,7 @@ fn setup_read_config(mut config: ResMut<Config>) {
     *config = Config::load_or_create_default();
 }
 
-pub fn build(app: &mut AppBuilder) {
+pub fn build(app: &mut App) {
     app.init_resource::<Config>()
-        .add_startup_system(setup_read_config.system());
+        .add_startup_system(setup_read_config);
 }

@@ -18,6 +18,7 @@ struct NetworkingQueues {
     outgoing: NetworkQueue,
 }
 
+#[derive(Component)]
 struct NetworkEnt;
 
 fn setup_networking(
@@ -126,7 +127,7 @@ fn system_update_networking(
     mut timer: ResMut<NetworkingTimer>,
     time: Res<Time>,
     config: Res<crate::config::Config>,
-    mut player_query: QuerySet<(
+    mut player_query: ParamSet<(
         Query<(&crate::CameraOrientation, &Transform)>,
         Query<(&NetworkEnt, &mut Transform)>,
     )>,
@@ -141,7 +142,7 @@ fn system_update_networking(
         return;
     }
 
-    for (_, mut transform) in player_query.q0().iter() {
+    for (_, mut transform) in player_query.p0().iter() {
         if let Ok(mut out) = nets.outgoing.try_lock() {
             if out.len() < 3 {
                 out.push(NetworkingAction::Location(
@@ -152,7 +153,7 @@ fn system_update_networking(
         }
     }
 
-    for (_, mut transform) in player_query.q1_mut().iter_mut() {
+    for (_, mut transform) in player_query.p1().iter_mut() {
         let ins = std::mem::replace(&mut *nets.incoming.try_lock().unwrap(), Vec::new());
         for item in ins.iter() {
             match item {
@@ -171,9 +172,9 @@ fn system_update_networking(
     }
 }
 
-pub fn build(app: &mut AppBuilder) {
+pub fn build(app: &mut App) {
     app.init_resource::<NetworkingQueues>()
         .insert_resource(NetworkingTimer(Timer::from_seconds(1.0 / 120.0, true)))
-        .add_startup_system(setup_networking.system())
-        .add_system(system_update_networking.system());
+        .add_startup_system(setup_networking)
+        .add_system(system_update_networking);
 }

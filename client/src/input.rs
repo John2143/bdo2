@@ -5,7 +5,7 @@ use std::hash::Hash;
 
 #[macro_export]
 macro_rules! keys_basic {
-    ($matrix: expr => $( $key: ident is $( $state: pat )|+ ),+) => {
+    ($matrix: expr => $( $key: ident is $( $state: pat_param )|+ ),+) => {
         {
             use InputState::*;
             $(
@@ -19,13 +19,13 @@ macro_rules! keys_basic {
 /// this lets you define tekken-like keybinds
 #[macro_export]
 macro_rules! keys {
-    ($matrix: expr => $( $keys: ident )|+ is $( $state: pat )|+ $(,)?) => {
+    ($matrix: expr => $( $keys: ident )|+ is $( $state: pat_param )|+ $(,)?) => {
         {
             keys!(@recurse_and $matrix => $( $keys )|+ is $( $state )|+)
         }
     };
 
-    ($matrix: expr => $( $keys: ident )|+ is $( $state: pat )|+ , $( $( $keys2: ident )|+ is $( $state2: pat )|+ ),* $(,)?) => {
+    ($matrix: expr => $( $keys: ident )|+ is $( $state: pat_param )|+ , $( $( $keys2: ident )|+ is $( $state2: pat_param )|+ ),* $(,)?) => {
         {
             keys!(@recurse_and $matrix => $( $keys )|+ is $( $state )|+)
             &&
@@ -33,20 +33,20 @@ macro_rules! keys {
         }
     };
 
-    (@recurse_and $matrix: expr => $( $keys: ident )|+ is $( $state: pat )|+) => {
+    (@recurse_and $matrix: expr => $( $keys: ident )|+ is $( $state: pat_param )|+) => {
         {
             use InputState::*;
             keys!(@in @or $matrix => $( $keys );* is $( $state )|+)
         }
     };
 
-    (@in @or $matrix: expr => $key: ident ; $( $keys: ident );* is $( $state: pat )|+) => {
+    (@in @or $matrix: expr => $key: ident ; $( $keys: ident );* is $( $state: pat_param )|+) => {
         matches!($matrix . $key, $( $state )|+)
             ||
         keys!(@in @or $matrix => $( $keys )* is $( $state )|+)
     };
 
-    (@in @or $matrix: expr => $key: ident is $( $state: pat )|+) => {
+    (@in @or $matrix: expr => $key: ident is $( $state: pat_param )|+) => {
         matches!($matrix . $key, $( $state )|+)
     };
 }
@@ -136,7 +136,6 @@ fn update(
         dash is JustPressed,
         forward is Held,
     ) {
-
     } else if keys!(key_matrix =>
         spec1 is JustPressed,
         forward is Held | JustPressed,
@@ -147,11 +146,11 @@ fn update(
 
 fn setup() {}
 
-pub fn build(app: &mut AppBuilder) {
+pub fn build(app: &mut App) {
     app
         //.init_resource::<>()
         //.add_resource(NetworkingTimer(Timer::from_seconds(1.0 / 120.0, true)))
-        .add_startup_system(setup.system())
-        .add_system(update.system())
+        .add_startup_system(setup)
+        .add_system(update)
         .add_event::<InputEvent>();
 }

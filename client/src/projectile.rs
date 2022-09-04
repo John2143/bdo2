@@ -4,6 +4,7 @@ use crate::{enemy::Enemy, input::InputEvent};
 
 fn setup() {}
 
+#[derive(Component)]
 struct Proj(Vec3, f32);
 
 fn update(
@@ -37,26 +38,27 @@ fn update(
     }
 }
 
-fn move_proj(
+fn move_proj_a(
     mut commands: Commands,
     time: Res<Time>,
-    mut qs: QuerySet<(
-        Query<(Entity, &mut Proj, &mut Transform)>,
-        Query<(Entity, &Proj, &Transform)>,
-        Query<(Entity, &Enemy, &Transform)>,
-    )>,
-
+    mut proj: Query<(Entity, &mut Proj, &mut Transform)>,
 ) {
-    for (id, mut proj_data, mut transform) in qs.q0_mut().iter_mut() {
+    for (id, mut proj_data, mut transform) in proj.iter_mut() {
         transform.translation += time.delta_seconds() * proj_data.0;
         proj_data.1 -= time.delta_seconds();
         if proj_data.1 <= 0.0 {
             commands.entity(id).despawn_recursive();
         }
     }
+}
 
-    for (_, _, transform) in qs.q1().iter() {
-        for (ent, _, enemy_trans) in qs.q2().iter() {
+fn move_proj_b(
+    mut commands: Commands,
+    proj: Query<(Entity, &Proj, &Transform)>,
+    enemy: Query<(Entity, &Enemy, &Transform)>,
+) {
+    for (_, _, transform) in proj.iter() {
+        for (ent, _, enemy_trans) in enemy.iter() {
             if enemy_trans.translation.distance(transform.translation) < 4.0 {
                 commands.entity(ent).despawn_recursive();
             }
@@ -64,11 +66,12 @@ fn move_proj(
     }
 }
 
-pub fn build(app: &mut AppBuilder) {
+pub fn build(app: &mut App) {
     app
         //.init_resource::<>()
         //.add_resource(NetworkingTimer(Timer::from_seconds(1.0 / 120.0, true)))
-        .add_startup_system(setup.system())
-        .add_system(update.system())
-        .add_system(move_proj.system());
+        .add_startup_system(setup)
+        .add_system(update)
+        .add_system(move_proj_a)
+        .add_system(move_proj_b);
 }

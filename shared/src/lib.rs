@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+#[derive(Component)]
 pub struct PhysicsProperties {
     pub movement_speed_ground: f32,
     pub movement_speed_air: f32,
@@ -7,6 +8,7 @@ pub struct PhysicsProperties {
     pub dash_cooldown: f64,
 }
 
+#[derive(Component)]
 pub struct Physics {
     pub gravity_func: fn(f32, f32) -> f32,
     pub velocity: Vec3,
